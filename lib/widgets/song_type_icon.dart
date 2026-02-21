@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../models/document_model.dart';
 
-/// Displays the song.svg or medley.svg icon for the given [SongType].
+/// Displays a music icon for the given [SongType].
+/// Song → music_note, Medley → queue_music
 class SongTypeIcon extends StatelessWidget {
   const SongTypeIcon({
     super.key,
@@ -18,17 +18,14 @@ class SongTypeIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final asset = type == SongType.medley
-        ? 'public/icon/medley.svg'
-        : 'public/icon/song.svg';
+    final iconData = type == SongType.medley
+        ? Icons.queue_music
+        : Icons.music_note;
 
-    return SvgPicture.asset(
-      asset,
-      width: size,
-      height: size,
-      colorFilter: color != null
-          ? ColorFilter.mode(color!, BlendMode.srcIn)
-          : null,
+    return Icon(
+      iconData,
+      size: size,
+      color: color ?? Theme.of(context).colorScheme.onSurfaceVariant,
     );
   }
 }

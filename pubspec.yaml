@@ -46,7 +46,6 @@ dependencies:
   intl: ^0.20.2
   html: ^0.15.6
   flutter_quill_delta_from_html: ^1.5.3
-  flutter_svg: ^2.0.9
 
 dev_dependencies:
   flutter_test:
@@ -72,8 +71,6 @@ flutter:
 
   assets:
     - .env
-    - public/icon/song.svg
-    - public/icon/medley.svg
 
   # To add assets to your application, add an assets section, like this:
   # assets:

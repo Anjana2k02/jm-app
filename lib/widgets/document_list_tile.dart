@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../models/document_model.dart';
 import 'song_type_icon.dart';
@@ -22,17 +21,6 @@ class DocumentListTile extends StatelessWidget {
   final VoidCallback onTap;
   final Widget? trailing;
 
-  String _formatRelativeTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return DateFormat('MMM d').format(dt);
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -53,10 +41,13 @@ class DocumentListTile extends StatelessWidget {
     final selectedBorderColor = isDark
         ? accent.withValues(alpha: 0.90)
         : accent.withValues(alpha: 0.80);
-    final unselectedBorderColor = accent.withValues(alpha: isDark ? 0.30 : 0.22);
+    final unselectedBorderColor = accent.withValues(
+      alpha: isDark ? 0.30 : 0.22,
+    );
 
     return Semantics(
-      label: '${document.title}, updated ${_formatRelativeTime(document.updatedAt)}',
+      label: document.title,
+
       selected: isSelected,
       button: true,
       child: AnimatedContainer(
@@ -119,53 +110,58 @@ class DocumentListTile extends StatelessWidget {
                             letterSpacing: -0.1,
                           ),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          _formatRelativeTime(document.updatedAt),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.80),
-                          ),
-                        ),
                       ],
                     ),
                   ),
 
-                  // -- Key + Created time column --
-                  if (document.songKey != null) ...[
+                  // -- Key + Duration column --
+                  if (document.songKey != null ||
+                      document.durationLabel != null) ...[
                     const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: accent.withValues(
-                                alpha: isSelected ? 0.20 : 0.12),
-                            borderRadius: BorderRadius.circular(5),
-                          ),
-                          child: Text(
-                            document.songKey!,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: isSelected
+                        if (document.songKey != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(
+                                alpha: isSelected ? 0.20 : 0.12,
+                              ),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              document.songKey!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isSelected
                                     ? Colors.white
-                                  : accent.withValues(alpha: 0.85),
-                              letterSpacing: 0.2,
+                                    : accent.withValues(alpha: 0.85),
+                                letterSpacing: 0.2,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          _formatRelativeTime(document.createdAt),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.70),
+                        if (document.durationLabel != null) ...[
+                          if (document.songKey != null)
+                            const SizedBox(height: 3),
+                          Text(
+                            document.durationLabel!,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                              color: cs.onSurfaceVariant.withValues(
+                                alpha: 0.70,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ],

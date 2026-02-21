@@ -119,8 +119,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     if (newIndex > oldIndex) newIndex -= 1;
 
     // Track the selected song through the reorder
-    final selectedDocId =
-        _songs.isNotEmpty ? _songs[_selectedIndex].documentId : null;
+    final selectedDocId = _songs.isNotEmpty
+        ? _songs[_selectedIndex].documentId
+        : null;
 
     final moved = list.removeAt(oldIndex);
     list.insert(newIndex, moved);
@@ -153,8 +154,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   Future<void> _showAddSongsSheet() async {
     final existingIds = _songs.map((s) => s.documentId).toSet();
-    final available =
-        _ws.documents.where((d) => !existingIds.contains(d.id)).toList();
+    final available = _ws.documents
+        .where((d) => !existingIds.contains(d.id))
+        .toList();
 
     if (available.isEmpty) {
       if (mounted) {
@@ -231,9 +233,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                           selected.add(doc.id);
                         }
                       }),
-                      title: Text(
-                        doc.title.isEmpty ? 'Untitled' : doc.title,
-                      ),
+                      title: Text(doc.title.isEmpty ? 'Untitled' : doc.title),
                       secondary: const Icon(Icons.music_note_outlined),
                     );
                   },
@@ -244,8 +244,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed:
-                        selected.isEmpty ? null : () => Navigator.pop(ctx),
+                    onPressed: selected.isEmpty
+                        ? null
+                        : () => Navigator.pop(ctx),
                     child: Text(
                       selected.isEmpty
                           ? 'Select songs to add'
@@ -297,8 +298,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   controller: nameCtrl,
                   autofocus: true,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration:
-                      const InputDecoration(labelText: 'Session name'),
+                  decoration: const InputDecoration(labelText: 'Session name'),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -408,8 +408,18 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
@@ -465,10 +475,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          width: 280,
-          child: _buildSidebar(showCollapseButton: false),
-        ),
+        SizedBox(width: 280, child: _buildSidebar(showCollapseButton: false)),
         const VerticalDivider(width: 1, thickness: 1),
         Expanded(child: _buildContentArea()),
       ],
@@ -509,9 +516,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         width: 20,
                         height: 56,
                         decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
                           borderRadius: const BorderRadius.horizontal(
                             right: Radius.circular(8),
                           ),
@@ -522,8 +529,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         child: Icon(
                           Icons.chevron_right,
                           size: 16,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -593,10 +599,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   const SizedBox(width: 4),
                   Text(
                     'Total: $_totalDurationLabel',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: cs.onSurfaceVariant,
-                    ),
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -608,68 +611,122 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             child: _loadingSongs
                 ? const Center(child: CircularProgressIndicator())
                 : _songs.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.music_note_outlined,
+                            size: 40,
+                            color: cs.outlineVariant,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No songs yet',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tap "Add Songs" above.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ReorderableListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 8,
+                    ),
+                    itemCount: _songs.length,
+                    onReorder: _reorderSongs,
+                    buildDefaultDragHandles: false,
+                    proxyDecorator: (child, index, animation) {
+                      return AnimatedBuilder(
+                        animation: animation,
+                        builder: (_, __) {
+                          final t = Curves.easeOut.transform(animation.value);
+                          return Transform.scale(
+                            scale: 1.0 + t * 0.03,
+                            child: Material(
+                              color: Colors.transparent,
+                              elevation: 12 * t,
+                              shadowColor: Colors.black54,
+                              borderRadius: BorderRadius.circular(10),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: child,
+                      );
+                    },
+                    itemBuilder: (ctx, i) {
+                      final song = _songs[i];
+                      final cs = Theme.of(ctx).colorScheme;
+                      AppDocument? doc;
+                      try {
+                        doc = _ws.documents.firstWhere(
+                          (d) => d.id == song.documentId,
+                        );
+                      } catch (_) {}
+
+                      if (doc == null) {
+                        return SizedBox.shrink(key: ValueKey(song.documentId));
+                      }
+
+                      return Dismissible(
+                        key: ValueKey(song.documentId),
+                        direction: DismissDirection.endToStart,
+                        onDismissed: (_) => _removeSong(song),
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 22),
+                          margin: const EdgeInsets.symmetric(vertical: 3),
+                          decoration: BoxDecoration(
+                            color: cs.errorContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.music_note_outlined,
-                                size: 40,
-                                color: cs.outlineVariant,
+                                Icons.delete_outline,
+                                color: cs.onErrorContainer,
+                                size: 22,
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 2),
                               Text(
-                                'No songs yet',
+                                'Remove',
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Tap "Add Songs" above.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: cs.onSurfaceVariant,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: cs.onErrorContainer,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      )
-                    : ReorderableListView.builder(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 8,
-                        ),
-                        itemCount: _songs.length,
-                        onReorder: _reorderSongs,
-                        itemBuilder: (_, i) {
-                          final song = _songs[i];
-                          AppDocument? doc;
-                          try {
-                            doc = _ws.documents
-                                .firstWhere((d) => d.id == song.documentId);
-                          } catch (_) {}
-
-                          if (doc == null) {
-                            return SizedBox.shrink(
-                              key: ValueKey(song.documentId),
-                            );
-                          }
-
-                          return SongCard(
-                            key: ValueKey(song.documentId),
+                        child: ReorderableDelayedDragStartListener(
+                          index: i,
+                          child: SongCard(
+                            key: ValueKey('card_${song.documentId}'),
                             document: doc,
-                            index: i,
                             isSelected: _selectedIndex == i,
                             onTap: () => _selectSong(i),
-                            onRemove: () => _removeSong(song),
-                          );
-                        },
-                      ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -690,7 +747,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.queue_music_outlined, size: 64, color: cs.outlineVariant),
+            Icon(
+              Icons.queue_music_outlined,
+              size: 64,
+              color: cs.outlineVariant,
+            ),
             const SizedBox(height: 16),
             Text(
               'No songs in this session',
@@ -743,6 +804,35 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 'Song ${_selectedIndex + 1} of ${_songs.length}',
                 style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
               ),
+              if (doc.songKey != null ||
+                  doc.bpm != null ||
+                  doc.durationLabel != null) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    if (doc.songKey != null)
+                      _MetaChip(
+                        icon: Icons.piano_outlined,
+                        label: doc.songKey!,
+                        cs: cs,
+                      ),
+                    if (doc.bpm != null)
+                      _MetaChip(
+                        icon: Icons.speed_outlined,
+                        label: '${doc.bpm} BPM',
+                        cs: cs,
+                      ),
+                    if (doc.durationLabel != null)
+                      _MetaChip(
+                        icon: Icons.timer_outlined,
+                        label: doc.durationLabel!,
+                        cs: cs,
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -754,9 +844,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
             child: QuillEditor.basic(
               controller: controller,
-              config: const QuillEditorConfig(
-                enableInteractiveSelection: true,
-              ),
+              config: const QuillEditorConfig(enableInteractiveSelection: true),
             ),
           ),
         ),
@@ -786,6 +874,44 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Meta chip ─────────────────────────────────────────────────────────────
+
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({required this.icon, required this.label, required this.cs});
+
+  final IconData icon;
+  final String label;
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: cs.primary),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
