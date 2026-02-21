@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/document_model.dart';
-import '../theme/app_colors.dart';
+import 'song_type_icon.dart';
+
+// Accent colours per type
+const Color _kSongAccent = Color(0xFF7C3AED); // violet / purple
+const Color _kMedleyAccent = Color(0xFF2563EB); // blue
 
 class DocumentListTile extends StatelessWidget {
   const DocumentListTile({
@@ -34,34 +38,69 @@ class DocumentListTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final selectedBg = isDark ? kDocTileSelectedDark : kDocTileSelectedLight;
+    final isMedley = document.songType == SongType.medley;
+    final accent = isMedley ? _kMedleyAccent : _kSongAccent;
+
+    // Background
+    final selectedBg = isDark
+        ? accent.withValues(alpha: 0.28)
+        : accent.withValues(alpha: 0.18);
+    final unselectedBg = isDark
+        ? accent.withValues(alpha: 0.07)
+        : accent.withValues(alpha: 0.04);
+
+    // Border
+    final selectedBorderColor = isDark
+        ? accent.withValues(alpha: 0.90)
+        : accent.withValues(alpha: 0.80);
+    final unselectedBorderColor = accent.withValues(alpha: isDark ? 0.30 : 0.22);
 
     return Semantics(
       label: '${document.title}, updated ${_formatRelativeTime(document.updatedAt)}',
       selected: isSelected,
       button: true,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 4),
+        duration: const Duration(milliseconds: 180),
+        margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
         decoration: BoxDecoration(
-          color: isSelected ? selectedBg : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          color: isSelected ? selectedBg : unselectedBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? selectedBorderColor : unselectedBorderColor,
+            width: isSelected ? 1.5 : 1.0,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.35),
+                    blurRadius: 14,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
+            splashColor: accent.withValues(alpha: 0.12),
+            highlightColor: accent.withValues(alpha: 0.08),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(
-                    isSelected ? Icons.article : Icons.article_outlined,
+                  // -- Type icon --
+                  SongTypeIcon(
+                    type: document.songType,
                     size: 18,
-                    color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                    color: isSelected ? accent : accent.withValues(alpha: 0.65),
                   ),
                   const SizedBox(width: 10),
+
+                  // -- Title + timestamp --
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,26 +111,65 @@ class DocumentListTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
                             color: isSelected
                                 ? cs.onSurface
-                                : cs.onSurface,
+                                : cs.onSurface.withValues(alpha: 0.88),
+                            letterSpacing: -0.1,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           _formatRelativeTime(document.updatedAt),
                           style: TextStyle(
                             fontSize: 11,
-                            color: cs.onSurfaceVariant,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.80),
                           ),
                         ),
                       ],
                     ),
                   ),
+
+                  // -- Key + Created time column --
+                  if (document.songKey != null) ...[
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(
+                                alpha: isSelected ? 0.20 : 0.12),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: Text(
+                            document.songKey!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isSelected
+                                    ? Colors.white
+                                  : accent.withValues(alpha: 0.85),
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _formatRelativeTime(document.createdAt),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.70),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
                   if (trailing != null) ...[
                     const SizedBox(width: 4),
                     trailing!,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/workspace_controller.dart';
+import '../models/document_model.dart';
 import '../widgets/document_list_tile.dart';
 import '../widgets/empty_state.dart';
 import 'home_screen.dart';
@@ -154,36 +155,80 @@ class _MobileLayoutState extends State<_MobileLayout> {
   }
 
   Future<void> _showCreateDocDialog() async {
-    final titleController = TextEditingController();
-    final title = await showDialog<String>(
+    final titleCtrl = TextEditingController();
+    SongType selectedType = SongType.song;
+
+    final result = await showDialog<({String title, SongType type})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New document'),
-        content: TextField(
-          controller: titleController,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Title',
-            hintText: 'Untitled',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('New song'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Song title',
+                  hintText: 'Untitled',
+                ),
+                onSubmitted: (_) => Navigator.pop(
+                  ctx,
+                  (title: titleCtrl.text, type: selectedType),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Type',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              RadioGroup<SongType>(
+                groupValue: selectedType,
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => selectedType = v);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<SongType>(
+                      title: const Text('Song'),
+                      value: SongType.song,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    RadioListTile<SongType>(
+                      title: const Text('Medley'),
+                      value: SongType.medley,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                ctx,
+                (title: titleCtrl.text, type: selectedType),
+              ),
+              child: const Text('Create'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, titleController.text),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
 
-    if (title == null || title.trim().isEmpty) return;
-    await _ws.createDocument(title);
+    if (result == null || result.title.trim().isEmpty) return;
+    await _ws.createDocument(result.title, result.type);
     if (mounted && _ws.selectedDocument != null) _openEditor();
   }
 
@@ -323,7 +368,7 @@ class _MobileLayoutState extends State<_MobileLayout> {
               ? FloatingActionButton.extended(
                   onPressed: _showCreateDocDialog,
                   icon: const Icon(Icons.add),
-                  label: const Text('New Document'),
+                  label: const Text('New Song'),
                 )
               : _currentTab == _tabSessions
               ? FloatingActionButton.extended(
@@ -342,9 +387,9 @@ class _MobileLayoutState extends State<_MobileLayout> {
                 label: 'Home',
               ),
               NavigationDestination(
-                icon: Icon(Icons.description_outlined),
-                selectedIcon: Icon(Icons.description),
-                label: 'Docs',
+                icon: Icon(Icons.music_note_outlined),
+                selectedIcon: Icon(Icons.music_note),
+                label: 'Songs',
               ),
               NavigationDestination(
                 icon: Icon(Icons.event_outlined),
@@ -383,7 +428,7 @@ class _MobileDocListTab extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Documents'),
+        title: const Text('Songs'),
         actions: [
           IconButton(
             icon: const Icon(Icons.search_outlined),
@@ -406,13 +451,13 @@ class _MobileDocListTab extends StatelessWidget {
           ? const Center(child: CircularProgressIndicator())
           : docs.isEmpty
           ? EmptyState(
-              icon: Icons.article_outlined,
-              title: 'No documents yet',
-              subtitle: 'Tap the button below to create your first document.',
+              icon: Icons.music_note_outlined,
+              title: 'No songs yet',
+              subtitle: 'Tap the button below to create your first song.',
               action: FilledButton.icon(
                 onPressed: onCreateDoc,
                 icon: const Icon(Icons.add),
-                label: const Text('New document'),
+                label: const Text('New song'),
               ),
             )
           : RefreshIndicator(

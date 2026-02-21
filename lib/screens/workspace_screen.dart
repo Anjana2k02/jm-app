@@ -4,13 +4,14 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../controllers/workspace_controller.dart';
+import '../models/document_model.dart';
 import '../models/template_model.dart';
 import '../utils/chord_detector.dart';
 import '../utils/clipboard_to_delta_converter.dart';
 import '../theme/app_colors.dart';
 import '../widgets/document_list_tile.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/save_status_chip.dart';
+import '../widgets/song_meta_bar.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'sessions/sessions_screen.dart';
@@ -30,15 +31,27 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
   final _imagePicker = ImagePicker();
+  final _titleCtrl = TextEditingController();
+  String? _currentDocId;
 
   _DesktopView _view = _DesktopView.home;
 
   WorkspaceController get _ws => widget.controller;
 
+  /// Keeps _titleCtrl in sync when the selected document changes.
+  void _syncTitleCtrl() {
+    final doc = _ws.selectedDocument;
+    if (doc?.id != _currentDocId) {
+      _currentDocId = doc?.id;
+      _titleCtrl.text = doc?.title ?? '';
+    }
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
     _focusNode.dispose();
+    _titleCtrl.dispose();
     super.dispose();
   }
 
@@ -82,35 +95,79 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   }
 
   Future<void> _showCreateDocDialog() async {
-    final titleController = TextEditingController();
-    final title = await showDialog<String>(
+    final titleCtrl = TextEditingController();
+    SongType selectedType = SongType.song;
+
+    final result = await showDialog<({String title, SongType type})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New document'),
-        content: TextField(
-          controller: titleController,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Title',
-            hintText: 'Untitled',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('New song'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Song title',
+                  hintText: 'Untitled',
+                ),
+                onSubmitted: (_) => Navigator.pop(
+                  ctx,
+                  (title: titleCtrl.text, type: selectedType),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Type',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              RadioGroup<SongType>(
+                groupValue: selectedType,
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => selectedType = v);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<SongType>(
+                      title: const Text('Song'),
+                      value: SongType.song,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    RadioListTile<SongType>(
+                      title: const Text('Medley'),
+                      value: SongType.medley,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                ctx,
+                (title: titleCtrl.text, type: selectedType),
+              ),
+              child: const Text('Create'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, titleController.text),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
-    if (title == null || title.trim().isEmpty) return;
-    if (mounted) await _ws.createDocument(title);
+    if (result == null || result.title.trim().isEmpty) return;
+    if (mounted) await _ws.createDocument(result.title, result.type);
   }
 
   Future<void> _showCreateTemplateDialog() async {
@@ -303,24 +360,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   Widget _buildEmptyEditor() {
     return EmptyState(
-      icon: Icons.edit_document,
-      title: 'No document selected',
-      subtitle: 'Create or select a document from the sidebar.',
+      icon: Icons.music_note_outlined,
+      title: 'No song selected',
+      subtitle: 'Create or select a song from the sidebar.',
       action: FilledButton.icon(
         onPressed: _showCreateDocDialog,
         icon: const Icon(Icons.add),
-        label: const Text('New document'),
+        label: const Text('New song'),
       ),
     );
   }
 
   Widget _buildEditor() {
+    _syncTitleCtrl();
     final cs = Theme.of(context).colorScheme;
     final doc = _ws.selectedDocument!;
 
     return Column(
       children: [
-        // Top bar: breadcrumb + actions
+        // Top bar: breadcrumb + editable title + actions
         Container(
           height: 52,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -330,26 +388,31 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           ),
           child: Row(
             children: [
-              Icon(Icons.edit_document, size: 16, color: cs.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Text(
-                'Jammer Docs',
-                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-              ),
-              Icon(Icons.chevron_right, size: 16, color: cs.onSurfaceVariant),
-              Expanded(
-                child: Text(
-                  doc.title.isEmpty ? 'Untitled' : doc.title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+              // Editable song title
+              IntrinsicWidth(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 80, maxWidth: 240),
+                  child: TextField(
+                    controller: _titleCtrl,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: 'Untitled',
+                    ),
+                    onSubmitted: (v) => _ws.renameDocument(v.trim()),
+                    onEditingComplete: () =>
+                        _ws.renameDocument(_titleCtrl.text.trim()),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              SaveStatusChip(saving: _ws.saving),
-              const SizedBox(width: 8),
+              const Spacer(),
               FilledButton.tonalIcon(
                 onPressed: _insertImage,
                 icon: const Icon(Icons.image_outlined, size: 16),
@@ -372,14 +435,19 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton(
+              TextButton(
                 onPressed: _ws.saving ? null : _ws.saveDocument,
-                icon: const Icon(Icons.save_outlined, size: 20),
-                tooltip: 'Save',
-                style: IconButton.styleFrom(minimumSize: const Size(36, 36)),
+                child: const Text('Save'),
               ),
             ],
           ),
+        ),
+
+        // Song metadata bar: Key · BPM · Duration
+        SongMetaBar(
+          key: ValueKey(doc.id),
+          document: doc,
+          onSave: _ws.updateSongMeta,
         ),
 
         // Quill toolbar — horizontal scroll so it never overflows
@@ -584,13 +652,13 @@ class _DesktopSidebar extends StatelessWidget {
 
             Divider(height: 1, color: borderColor),
 
-            // Documents section header
+            // Songs section header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
               child: Row(
                 children: [
                   Text(
-                    'DOCUMENTS',
+                    'SONGS',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -602,7 +670,7 @@ class _DesktopSidebar extends StatelessWidget {
                   IconButton(
                     onPressed: onCreateDoc,
                     icon: const Icon(Icons.add, size: 18),
-                    tooltip: 'New document',
+                    tooltip: 'New song',
                     style: IconButton.styleFrom(
                       minimumSize: const Size(34, 34),
                     ),
@@ -611,12 +679,12 @@ class _DesktopSidebar extends StatelessWidget {
               ),
             ),
 
-            // Document list
+            // Song list
             Expanded(
               child: docs.isEmpty
                   ? Center(
                       child: Text(
-                        'No documents yet',
+                        'No songs yet',
                         style: TextStyle(
                           fontSize: 13,
                           color: cs.onSurfaceVariant,
@@ -725,7 +793,7 @@ class _ViewSwitcher extends StatelessWidget {
     return Column(
       children: [
         item(_DesktopView.home, Icons.home_outlined, 'Home'),
-        item(_DesktopView.documents, Icons.description_outlined, 'Documents'),
+        item(_DesktopView.documents, Icons.music_note_outlined, 'Songs'),
         item(_DesktopView.sessions, Icons.event_outlined, 'Sessions'),
         InkWell(
           onTap: onSearch,
@@ -836,7 +904,7 @@ class TemplateListScreen extends StatelessWidget {
     return const EmptyState(
       icon: Icons.layers_outlined,
       title: 'Templates',
-      subtitle: 'Create templates to organize your document order.',
+      subtitle: 'Create templates to organize your song order.',
     );
   }
 }

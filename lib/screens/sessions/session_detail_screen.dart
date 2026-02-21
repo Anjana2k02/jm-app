@@ -414,6 +414,23 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
+  /// Sum of durationSeconds for all songs in the session that have a duration.
+  String? get _totalDurationLabel {
+    int total = 0;
+    for (final song in _songs) {
+      try {
+        final doc = _ws.documents.firstWhere((d) => d.id == song.documentId);
+        total += doc.durationSeconds ?? 0;
+      } catch (_) {}
+    }
+    if (total <= 0) return null;
+    final m = total ~/ 60;
+    final s = total % 60;
+    if (m == 0) return '${s}s';
+    if (s == 0) return '${m}m';
+    return '${m}m ${s}s';
+  }
+
   // ─── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -563,6 +580,27 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               ],
             ),
           ),
+          if (_totalDurationLabel != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 14,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Total: $_totalDurationLabel',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(height: 1, thickness: 1),
 
           // Song list

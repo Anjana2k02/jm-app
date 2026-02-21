@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart' show Clipboard;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -59,6 +61,22 @@ class WorkspaceController extends ChangeNotifier {
   bool loading = true;
   bool saving = false;
   String? loadError; // non-null when the last loadAll() had a fetch failure
+
+  Timer? _autoSaveTimer;
+
+  // ─── Dispose ───────────────────────────────────────────────────────────────
+
+  @override
+  void dispose() {
+    _autoSaveTimer?.cancel();
+    quillController?.dispose();
+    super.dispose();
+  }
+
+  void _scheduleAutoSave() {
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(seconds: 2), saveDocument);
+  }
 
   // Sessions
   List<JamSession> sessions = [];
@@ -195,9 +213,10 @@ class WorkspaceController extends ChangeNotifier {
     return Document.fromJson(content);
   }
 
-  /// Creates a [QuillController] pre-configured with the chord-aware paste hook.
+  /// Creates a [QuillController] pre-configured with the chord-aware paste hook
+  /// and a 2-second debounced auto-save listener.
   QuillController _makeController(List<dynamic> content) {
-    return QuillController(
+    final ctrl = QuillController(
       document: _documentFromContent(content),
       selection: const TextSelection.collapsed(offset: 0),
       config: QuillControllerConfig(
@@ -206,6 +225,8 @@ class WorkspaceController extends ChangeNotifier {
         ),
       ),
     );
+    ctrl.document.changes.listen((_) => _scheduleAutoSave());
+    return ctrl;
   }
 
   /// Intercepts clipboard paste to detect chord sheets and apply monospace
@@ -236,13 +257,17 @@ class WorkspaceController extends ChangeNotifier {
 
   // ─── Documents ────────────────────────────────────────────────────────────
 
-  Future<void> createDocument(String title) async {
+  Future<void> createDocument(
+    String title, [
+    SongType songType = SongType.song,
+  ]) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
 
     final document = await _documentService.createDocument(
       userId: user.id,
       title: title.trim(),
+      songType: songType,
     );
 
     documents = [...documents, document];
@@ -305,6 +330,36 @@ class WorkspaceController extends ChangeNotifier {
       return d;
     }).toList();
     saving = false;
+    notifyListeners();
+  }
+
+  /// Saves song metadata (key, bpm, duration) for the currently selected song.
+  /// Accepts a map of DB column names → values (null clears the field).
+  Future<void> updateSongMeta(Map<String, dynamic> fields) async {
+    final doc = selectedDocument;
+    if (doc == null) return;
+
+    await _documentService.updateSongMeta(
+      documentId: doc.id,
+      fields: fields,
+    );
+
+    final updated = doc.copyWith(
+      songKey: fields.containsKey('song_key')
+          ? (fields['song_key'] as String?)
+          : doc.songKey,
+      bpm: fields.containsKey('bpm') ? (fields['bpm'] as int?) : doc.bpm,
+      durationSeconds: fields.containsKey('duration_seconds')
+          ? (fields['duration_seconds'] as int?)
+          : doc.durationSeconds,
+      clearSongKey: fields['song_key'] == null && fields.containsKey('song_key'),
+      clearBpm: fields['bpm'] == null && fields.containsKey('bpm'),
+      clearDuration: fields['duration_seconds'] == null &&
+          fields.containsKey('duration_seconds'),
+    );
+
+    selectedDocument = updated;
+    documents = documents.map((d) => d.id == doc.id ? updated : d).toList();
     notifyListeners();
   }
 

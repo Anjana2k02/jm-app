@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/document_model.dart';
+import 'song_type_icon.dart';
 
 /// A card representing a song in the session sidebar.
 ///
@@ -88,7 +89,7 @@ class SongCard extends StatelessWidget {
               ),
               const SizedBox(width: 10),
 
-              // Song title
+              // Song title + type badge
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,6 +104,27 @@ class SongCard extends StatelessWidget {
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SongTypeIcon(
+                          type: document.songType,
+                          size: 11,
+                          color: cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          document.songType == SongType.medley
+                              ? 'Medley'
+                              : 'Song',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

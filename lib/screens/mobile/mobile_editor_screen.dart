@@ -9,6 +9,7 @@ import '../../utils/clipboard_to_delta_converter.dart';
 import '../../utils/chord_detector.dart';
 import '../../widgets/mobile_toolbar.dart';
 import '../../widgets/save_status_chip.dart';
+import '../../widgets/song_meta_bar.dart';
 
 class MobileEditorScreen extends StatefulWidget {
   const MobileEditorScreen({
@@ -213,6 +214,11 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
                       controller: quill,
                       onImageInsert: _insertImage,
                       onSmartPaste: _handleSmartPaste,
+                    ),
+                    SongMetaBar(
+                      key: ValueKey(doc.id),
+                      document: doc,
+                      onSave: _ws.updateSongMeta,
                     ),
                     Expanded(
                       child: Padding(

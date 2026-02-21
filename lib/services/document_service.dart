@@ -22,29 +22,25 @@ class DocumentService {
   Future<AppDocument> createDocument({
     required String userId,
     required String title,
+    SongType songType = SongType.song,
   }) async {
-    print(
-      'DocumentService: Creating document with userId=$userId, title=$title',
-    );
+    final payload = {
+      'user_id': userId,
+      'title': title,
+      'content': const [],
+      'song_type': songType.name,
+    };
 
-    final payload = {'user_id': userId, 'title': title, 'content': const []};
-    print('DocumentService: Payload = $payload');
+    final response = await _client
+        .from('documents')
+        .insert(payload)
+        .select()
+        .single();
 
-    try {
-      final response = await _client
-          .from('documents')
-          .insert(payload)
-          .select()
-          .single();
-
-      print('DocumentService: Success! Response: $response');
-      return AppDocument.fromMap(response);
-    } catch (e) {
-      print('DocumentService: Error creating document: $e');
-      rethrow;
-    }
+    return AppDocument.fromMap(response);
   }
 
+  /// Saves the Quill content and title for a document.
   Future<void> updateDocument({
     required String documentId,
     required String title,
@@ -55,6 +51,21 @@ class DocumentService {
         .update({
           'title': title,
           'content': content,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', documentId);
+  }
+
+  /// Saves song metadata fields (song_key, bpm, duration_seconds) without
+  /// overwriting the Quill content.
+  Future<void> updateSongMeta({
+    required String documentId,
+    required Map<String, dynamic> fields,
+  }) async {
+    await _client
+        .from('documents')
+        .update({
+          ...fields,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', documentId);
