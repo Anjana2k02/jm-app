@@ -45,8 +45,10 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
     final file = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
 
-    final url =
-        await _ws.storageService.uploadImage(userId: user.id, file: file);
+    final url = await _ws.storageService.uploadImage(
+      userId: user.id,
+      file: file,
+    );
     final index = controller.selection.baseOffset;
     controller.replaceText(
       index,
@@ -68,12 +70,16 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
           autofocus: true,
           textCapitalization: TextCapitalization.sentences,
           decoration: const InputDecoration(
-              labelText: 'Title', hintText: 'Untitled'),
+            labelText: 'Title',
+            hintText: 'Untitled',
+          ),
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, titleController.text),
             child: const Text('Create'),
@@ -94,13 +100,14 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
         content: TextField(
           controller: nameController,
           autofocus: true,
-          decoration:
-              const InputDecoration(labelText: 'Template name'),
+          decoration: const InputDecoration(labelText: 'Template name'),
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, nameController.text),
             child: const Text('Create'),
@@ -195,8 +202,18 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
@@ -211,7 +228,8 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
       builder: (context, _) {
         if (_ws.loading) {
           return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         return Scaffold(
@@ -246,10 +264,7 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
         );
 
       case 2: // Sessions
-        return SessionsScreen(
-          controller: _ws,
-          onCreateSession: _showCreateSessionDialog,
-        );
+        return SessionsScreen(controller: _ws);
 
       case 3: // Settings
         return _TabletSettingsPane(controller: _ws);
@@ -270,8 +285,7 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
 
             // Editor pane (expanded)
             Expanded(
-              child: _ws.selectedDocument == null ||
-                      _ws.quillController == null
+              child: _ws.selectedDocument == null || _ws.quillController == null
                   ? EmptyState(
                       icon: Icons.edit_document,
                       title: 'No document selected',
@@ -403,8 +417,7 @@ class _DocumentListPane extends StatelessWidget {
                   onPressed: onCreateTemplate,
                   icon: const Icon(Icons.layers_outlined, size: 18),
                   tooltip: 'New template',
-                  style:
-                      IconButton.styleFrom(minimumSize: const Size(34, 34)),
+                  style: IconButton.styleFrom(minimumSize: const Size(34, 34)),
                 ),
               ],
             ),
@@ -431,8 +444,7 @@ class _DocumentListPane extends StatelessWidget {
                   onPressed: onCreateDoc,
                   icon: const Icon(Icons.add, size: 18),
                   tooltip: 'New document',
-                  style:
-                      IconButton.styleFrom(minimumSize: const Size(34, 34)),
+                  style: IconButton.styleFrom(minimumSize: const Size(34, 34)),
                 ),
               ],
             ),
@@ -445,44 +457,48 @@ class _DocumentListPane extends StatelessWidget {
                     child: Text(
                       'No documents yet',
                       style: TextStyle(
-                          fontSize: 13, color: cs.onSurfaceVariant),
+                        fontSize: 13,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   )
                 : controller.activeTemplate == null
-                    ? ListView.builder(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
-                        itemCount: docs.length,
-                        itemBuilder: (_, i) {
-                          final doc = docs[i];
-                          return DocumentListTile(
-                            document: doc,
-                            isSelected:
-                                controller.selectedDocument?.id == doc.id,
-                            onTap: () => controller.selectDocument(doc),
-                          );
-                        },
-                      )
-                    : ReorderableListView(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
-                        onReorder: controller.reorderDocuments,
-                        children: [
-                          for (final doc in docs)
-                            DocumentListTile(
-                              key: ValueKey(doc.id),
-                              document: doc,
-                              isSelected:
-                                  controller.selectedDocument?.id == doc.id,
-                              onTap: () => controller.selectDocument(doc),
-                              trailing: Icon(
-                                Icons.drag_handle,
-                                size: 18,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                        ],
-                      ),
+                ? ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    itemCount: docs.length,
+                    itemBuilder: (_, i) {
+                      final doc = docs[i];
+                      return DocumentListTile(
+                        document: doc,
+                        isSelected: controller.selectedDocument?.id == doc.id,
+                        onTap: () => controller.selectDocument(doc),
+                      );
+                    },
+                  )
+                : ReorderableListView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    onReorder: controller.reorderDocuments,
+                    children: [
+                      for (final doc in docs)
+                        DocumentListTile(
+                          key: ValueKey(doc.id),
+                          document: doc,
+                          isSelected: controller.selectedDocument?.id == doc.id,
+                          onTap: () => controller.selectDocument(doc),
+                          trailing: Icon(
+                            Icons.drag_handle,
+                            size: 18,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -526,7 +542,9 @@ class _EditorPane extends StatelessWidget {
                 child: Text(
                   doc.title.isEmpty ? 'Untitled' : doc.title,
                   style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -537,16 +555,13 @@ class _EditorPane extends StatelessWidget {
                 onPressed: onInsertImage,
                 icon: const Icon(Icons.image_outlined, size: 20),
                 tooltip: 'Insert image',
-                style:
-                    IconButton.styleFrom(minimumSize: const Size(36, 36)),
+                style: IconButton.styleFrom(minimumSize: const Size(36, 36)),
               ),
               IconButton(
-                onPressed:
-                    controller.saving ? null : controller.saveDocument,
+                onPressed: controller.saving ? null : controller.saveDocument,
                 icon: const Icon(Icons.save_outlined, size: 20),
                 tooltip: 'Save',
-                style:
-                    IconButton.styleFrom(minimumSize: const Size(36, 36)),
+                style: IconButton.styleFrom(minimumSize: const Size(36, 36)),
               ),
             ],
           ),
@@ -646,8 +661,10 @@ class _TabletSettingsPane extends StatelessWidget {
                   ),
                 ),
               ),
-              title: const Text('Account',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              title: const Text(
+                'Account',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
               subtitle: Text(email),
             ),
           ),
@@ -711,4 +728,3 @@ class _TemplateDropdown extends StatelessWidget {
     );
   }
 }
-
