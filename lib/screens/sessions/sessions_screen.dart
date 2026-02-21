@@ -4,6 +4,7 @@ import '../../controllers/workspace_controller.dart';
 import '../../models/session_model.dart';
 import '../../widgets/create_session_modal.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/glass_dialog.dart';
 import 'session_detail_screen.dart';
 
 class SessionsScreen extends StatelessWidget {

@@ -1,6 +1,6 @@
 {
-    "name": "jammer_app",
-    "short_name": "jammer_app",
+    "name": "J manager",
+    "short_name": "J manager",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

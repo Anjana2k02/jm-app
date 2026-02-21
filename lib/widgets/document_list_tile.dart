@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/document_model.dart';
+import '../utils/haptics.dart';
 import 'song_type_icon.dart';
 
 // Accent colours per type
@@ -74,103 +75,113 @@ class DocumentListTile extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onTap,
+            onTap: () {
+              HapticsManager.songSelectedFeedback();
+              onTap();
+            },
             borderRadius: BorderRadius.circular(10),
             splashColor: accent.withValues(alpha: 0.12),
             highlightColor: accent.withValues(alpha: 0.08),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // -- Type icon --
-                  SongTypeIcon(
-                    type: document.songType,
-                    size: 18,
-                    color: isSelected ? accent : accent.withValues(alpha: 0.65),
-                  ),
-                  const SizedBox(width: 10),
-
-                  // -- Title + timestamp --
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          document.title.isEmpty ? 'Untitled' : document.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: isSelected
-                                ? cs.onSurface
-                                : cs.onSurface.withValues(alpha: 0.88),
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                      ],
+              child: SizedBox(
+                height: 56,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // -- Type icon --
+                    SongTypeIcon(
+                      type: document.songType,
+                      size: 18,
+                      color: isSelected
+                          ? accent
+                          : accent.withValues(alpha: 0.65),
                     ),
-                  ),
+                    const SizedBox(width: 10),
 
-                  // -- Key + Duration column --
-                  if (document.songKey != null ||
-                      document.durationLabel != null) ...[
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (document.songKey != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: accent.withValues(
-                                alpha: isSelected ? 0.20 : 0.12,
-                              ),
-                              borderRadius: BorderRadius.circular(5),
-                            ),
-                            child: Text(
-                              document.songKey!,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: isSelected
-                                    ? Colors.white
-                                    : accent.withValues(alpha: 0.85),
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                          ),
-                        if (document.durationLabel != null) ...[
-                          if (document.songKey != null)
-                            const SizedBox(height: 3),
+                    // -- Title + timestamp --
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           Text(
-                            document.durationLabel!,
+                            document.title.isEmpty
+                                ? 'Untitled'
+                                : document.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 10,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                              color: cs.onSurfaceVariant.withValues(
-                                alpha: 0.70,
-                              ),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: isSelected
+                                  ? cs.onSurface
+                                  : cs.onSurface.withValues(alpha: 0.88),
+                              letterSpacing: -0.1,
                             ),
                           ),
                         ],
-                      ],
+                      ),
                     ),
-                  ],
 
-                  if (trailing != null) ...[
-                    const SizedBox(width: 4),
-                    trailing!,
+                    // -- Key + Duration column --
+                    if (document.songKey != null ||
+                        document.durationLabel != null) ...[
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (document.songKey != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(
+                                  alpha: isSelected ? 0.20 : 0.12,
+                                ),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(
+                                document.songKey!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : accent.withValues(alpha: 0.85),
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ),
+                          if (document.durationLabel != null) ...[
+                            if (document.songKey != null)
+                              const SizedBox(height: 3),
+                            Text(
+                              document.durationLabel!,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                                color: cs.onSurfaceVariant.withValues(
+                                  alpha: 0.70,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+
+                    if (trailing != null) ...[
+                      const SizedBox(width: 4),
+                      trailing!,
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

@@ -7,9 +7,11 @@ import '../../controllers/workspace_controller.dart';
 import '../../models/document_model.dart';
 import '../../utils/clipboard_to_delta_converter.dart';
 import '../../utils/chord_detector.dart';
+import '../../utils/haptics.dart';
 import '../../widgets/mobile_toolbar.dart';
 import '../../widgets/save_status_chip.dart';
 import '../../widgets/song_meta_bar.dart';
+import '../../widgets/document_list_tile.dart';
 
 class MobileEditorScreen extends StatefulWidget {
   const MobileEditorScreen({
@@ -33,6 +35,7 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
   late final TextEditingController _titleController;
 
   bool _editingTitle = false;
+  bool _sidebarVisible = true;
 
   WorkspaceController get _ws => widget.controller;
 
@@ -82,6 +85,14 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
     }
   }
 
+  Future<void> _selectDoc(AppDocument doc) async {
+    if (_editingTitle) await _commitTitle();
+    if (_ws.selectedDocument?.id == doc.id) return;
+    _ws.selectDocument(doc);
+    _titleController.text = doc.title;
+    if (mounted) setState(() {});
+  }
+
   Future<void> _handleSmartPaste() async {
     final quill = _ws.quillController;
     if (quill == null) return;
@@ -107,8 +118,10 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
     final file = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
 
-    final url =
-        await _ws.storageService.uploadImage(userId: user.id, file: file);
+    final url = await _ws.storageService.uploadImage(
+      userId: user.id,
+      file: file,
+    );
     final index = quill.selection.baseOffset;
     quill.replaceText(
       index,
@@ -117,6 +130,101 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
       TextSelection.collapsed(offset: index + 1),
     );
     if (mounted) setState(() {});
+  }
+
+  Widget _buildEditorContent(QuillController quill, AppDocument doc) {
+    return Column(
+      children: [
+        MobileToolbar(
+          controller: quill,
+          onImageInsert: _insertImage,
+          onSmartPaste: _handleSmartPaste,
+        ),
+        SongMetaBar(
+          key: ValueKey(doc.id),
+          document: doc,
+          onSave: _ws.updateSongMeta,
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: QuillEditor(
+              controller: quill,
+              scrollController: _scrollController,
+              focusNode: _editorFocusNode,
+              config: const QuillEditorConfig(
+                autoFocus: true,
+                expands: true,
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSidebar(AppDocument selectedDoc) {
+    final cs = Theme.of(context).colorScheme;
+    final docs = _ws.orderedDocuments();
+
+    return Container(
+      color: cs.surfaceContainerLow,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 6, 6),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () async {
+                    if (_editingTitle) await _commitTitle();
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.arrow_back, size: 16),
+                  label: const Text('Go Back'),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  tooltip: 'Hide list',
+                  onPressed: () {
+                    HapticsManager.sidebarToggleFeedback();
+                    setState(() => _sidebarVisible = false);
+                  },
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 1),
+          Expanded(
+            child: docs.isEmpty
+                ? Center(
+                    child: Text(
+                      'No songs yet',
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 6,
+                    ),
+                    itemCount: docs.length,
+                    itemBuilder: (_, i) {
+                      final item = docs[i];
+                      return DocumentListTile(
+                        document: item,
+                        isSelected: selectedDoc.id == item.id,
+                        onTap: () => _selectDoc(item),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -128,6 +236,8 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
       builder: (context, _) {
         final quill = _ws.quillController;
         final doc = _ws.selectedDocument ?? widget.document;
+        final screenWidth = MediaQuery.sizeOf(context).width;
+        final sidebarWidth = (screenWidth * 0.72).clamp(240.0, 320.0);
 
         return Scaffold(
           appBar: AppBar(
@@ -208,36 +318,73 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
           ),
           body: quill == null
               ? const Center(child: CircularProgressIndicator())
-              : Column(
+              : Stack(
+                  fit: StackFit.expand,
                   children: [
-                    MobileToolbar(
-                      controller: quill,
-                      onImageInsert: _insertImage,
-                      onSmartPaste: _handleSmartPaste,
-                    ),
-                    SongMetaBar(
-                      key: ValueKey(doc.id),
-                      document: doc,
-                      onSave: _ws.updateSongMeta,
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
+                    // Editor always fills full width underneath
+                    _buildEditorContent(quill, doc),
+
+                    // Dim scrim — tap outside to close sidebar
+                    if (_sidebarVisible)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            HapticsManager.sidebarToggleFeedback();
+                            setState(() => _sidebarVisible = false);
+                          },
+                          child: const ColoredBox(color: Color(0x55000000)),
                         ),
-                        child: QuillEditor(
-                          controller: quill,
-                          scrollController: _scrollController,
-                          focusNode: _editorFocusNode,
-                          config: const QuillEditorConfig(
-                            autoFocus: true,
-                            expands: true,
-                            padding: EdgeInsets.zero,
+                      ),
+
+                    // Sidebar overlay
+                    if (_sidebarVisible)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: sidebarWidth,
+                        child: _buildSidebar(doc),
+                      ),
+
+                    // Expand handle — shown when sidebar is hidden
+                    if (!_sidebarVisible)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: GestureDetector(
+                            onTap: () {
+                              HapticsManager.sidebarToggleFeedback();
+                              setState(() => _sidebarVisible = true);
+                            },
+                            child: Container(
+                              width: 28,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest,
+                                borderRadius: const BorderRadius.horizontal(
+                                  right: Radius.circular(12),
+                                ),
+                                border: Border.all(color: cs.outlineVariant),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 6,
+                                    offset: const Offset(2, 0),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.chevron_right,
+                                size: 20,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
         );

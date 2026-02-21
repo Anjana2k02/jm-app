@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/document_model.dart';
+import '../utils/haptics.dart';
 import 'song_type_icon.dart';
 
 const Color _kSongAccent = Color(0xFF7C3AED); // violet / purple
@@ -66,13 +67,18 @@ class SongCard extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onTap,
+          onTap: () {
+            HapticsManager.songSelectedFeedback();
+            onTap();
+          },
           borderRadius: BorderRadius.circular(10),
           splashColor: accent.withValues(alpha: 0.12),
           highlightColor: accent.withValues(alpha: 0.08),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
+            child: SizedBox(
+              height: 56,
+              child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Type icon
@@ -114,32 +120,55 @@ class SongCard extends StatelessWidget {
                   ),
                 ),
 
-                // Key badge (if available)
-                if (document.songKey != null) ...[
+                // Key badge + duration column (if either is available)
+                if (document.songKey != null ||
+                    document.durationLabel != null) ...[
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: isSelected ? 0.20 : 0.12),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Text(
-                      document.songKey!,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: isSelected
-                            ? Colors.white
-                            : accent.withValues(alpha: 0.85),
-                        letterSpacing: 0.2,
-                      ),
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (document.songKey != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(
+                              alpha: isSelected ? 0.20 : 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: Text(
+                            document.songKey!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isSelected
+                                  ? Colors.white
+                                  : accent.withValues(alpha: 0.85),
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      if (document.durationLabel != null) ...[
+                        if (document.songKey != null)
+                          const SizedBox(height: 3),
+                        Text(
+                          document.durationLabel!,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.70),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ],
+            ),
             ),
           ),
         ),

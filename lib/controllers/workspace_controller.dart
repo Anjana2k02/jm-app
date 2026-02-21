@@ -363,6 +363,17 @@ class WorkspaceController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deleteDocument(String documentId) async {
+    await _documentService.deleteDocument(documentId);
+    if (selectedDocument?.id == documentId) {
+      selectedDocument = null;
+      quillController?.dispose();
+      quillController = null;
+    }
+    documents = documents.where((d) => d.id != documentId).toList();
+    notifyListeners();
+  }
+
   Future<void> reorderDocuments(int oldIndex, int newIndex) async {
     if (activeTemplate == null) return;
 

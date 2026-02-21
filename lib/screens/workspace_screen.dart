@@ -11,6 +11,7 @@ import '../utils/clipboard_to_delta_converter.dart';
 import '../theme/app_colors.dart';
 import '../widgets/document_list_tile.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_dialog.dart';
 import '../widgets/song_meta_bar.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
@@ -98,10 +99,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final titleCtrl = TextEditingController();
     SongType selectedType = SongType.song;
 
-    final result = await showDialog<({String title, SongType type})>(
+    final result = await showGlassDialog<({String title, SongType type})>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: Colors.transparent,
           title: const Text('New song'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -172,9 +174,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   Future<void> _showCreateTemplateDialog() async {
     final nameController = TextEditingController();
-    final name = await showDialog<String>(
+    final name = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.transparent,
         title: const Text('New template'),
         content: TextField(
           controller: nameController,
@@ -203,10 +206,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     DateTime? selectedDate;
     final notesCtrl = TextEditingController();
 
-    final result = await showDialog<bool>(
+    final result = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: Colors.transparent,
           title: const Text('New session'),
           content: SingleChildScrollView(
             child: Column(
@@ -297,6 +301,33 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
+  Future<void> _confirmDeleteDocument(AppDocument doc) async {
+    final confirmed = await showGlassDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.transparent,
+        title: const Text('Delete song?'),
+        content: Text(
+          'Permanently delete "${doc.title.isEmpty ? 'Untitled' : doc.title}"? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _ws.deleteDocument(doc.id);
+  }
+
   void _openSearch() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -329,6 +360,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 onCreateDoc: _showCreateDocDialog,
                 onCreateTemplate: _showCreateTemplateDialog,
                 onSearch: _openSearch,
+                onDeleteDoc: _confirmDeleteDocument,
               ),
               Expanded(child: _buildMainContent()),
             ],
@@ -530,6 +562,7 @@ class _DesktopSidebar extends StatelessWidget {
     required this.onCreateDoc,
     required this.onCreateTemplate,
     required this.onSearch,
+    required this.onDeleteDoc,
   });
 
   final WorkspaceController controller;
@@ -538,6 +571,7 @@ class _DesktopSidebar extends StatelessWidget {
   final VoidCallback onCreateDoc;
   final VoidCallback onCreateTemplate;
   final VoidCallback onSearch;
+  final Future<void> Function(AppDocument) onDeleteDoc;
 
   @override
   Widget build(BuildContext context) {
@@ -700,10 +734,43 @@ class _DesktopSidebar extends StatelessWidget {
                       itemCount: docs.length,
                       itemBuilder: (ctx, i) {
                         final doc = docs[i];
-                        return DocumentListTile(
-                          document: doc,
-                          isSelected: controller.selectedDocument?.id == doc.id,
-                          onTap: () => controller.selectDocument(doc),
+                        return Dismissible(
+                          key: ValueKey(doc.id),
+                          direction: DismissDirection.endToStart,
+                          confirmDismiss: (_) => onDeleteDoc(doc).then((_) => false),
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 18),
+                            margin: const EdgeInsets.symmetric(vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Theme.of(ctx).colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.delete_outline,
+                                  color: Theme.of(ctx).colorScheme.onErrorContainer,
+                                  size: 20,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Delete',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(ctx).colorScheme.onErrorContainer,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          child: DocumentListTile(
+                            document: doc,
+                            isSelected: controller.selectedDocument?.id == doc.id,
+                            onTap: () => controller.selectDocument(doc),
+                          ),
                         );
                       },
                     )
@@ -715,16 +782,49 @@ class _DesktopSidebar extends StatelessWidget {
                       onReorder: controller.reorderDocuments,
                       children: [
                         for (final doc in docs)
-                          DocumentListTile(
+                          Dismissible(
                             key: ValueKey(doc.id),
-                            document: doc,
-                            isSelected:
-                                controller.selectedDocument?.id == doc.id,
-                            onTap: () => controller.selectDocument(doc),
-                            trailing: Icon(
-                              Icons.drag_handle,
-                              size: 18,
-                              color: cs.onSurfaceVariant,
+                            direction: DismissDirection.endToStart,
+                            confirmDismiss: (_) => onDeleteDoc(doc).then((_) => false),
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 18),
+                              margin: const EdgeInsets.symmetric(vertical: 3),
+                              decoration: BoxDecoration(
+                                color: cs.errorContainer,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.delete_outline,
+                                    color: cs.onErrorContainer,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Delete',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: cs.onErrorContainer,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            child: DocumentListTile(
+                              key: ValueKey('tile_${doc.id}'),
+                              document: doc,
+                              isSelected:
+                                  controller.selectedDocument?.id == doc.id,
+                              onTap: () => controller.selectDocument(doc),
+                              trailing: Icon(
+                                Icons.drag_handle,
+                                size: 18,
+                                color: cs.onSurfaceVariant,
+                              ),
                             ),
                           ),
                       ],
@@ -755,6 +855,7 @@ class _ViewSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Widget item(_DesktopView view, IconData icon, String label) {
       final isSelected = currentView == view;
@@ -764,8 +865,13 @@ class _ViewSwitcher extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: isSelected
               ? BoxDecoration(
-                  color: cs.primaryContainer.withAlpha(120),
-                  border: Border(left: BorderSide(color: cs.primary, width: 2)),
+                  color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.09),
+                  border: Border(
+                    left: BorderSide(
+                      color: cs.primary.withValues(alpha: isDark ? 0.90 : 0.80),
+                      width: 2,
+                    ),
+                  ),
                 )
               : null,
           child: Row(
