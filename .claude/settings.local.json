@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub get:*)",
+      "Bash(/c/Users/anjan/flutter/bin/flutter pub get:*)"
+    ]
+  }
+}
