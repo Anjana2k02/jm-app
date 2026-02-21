@@ -67,8 +67,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final file = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
 
-    final url =
-        await _ws.storageService.uploadImage(userId: user.id, file: file);
+    final url = await _ws.storageService.uploadImage(
+      userId: user.id,
+      file: file,
+    );
     final index = controller.selection.baseOffset;
     controller.replaceText(
       index,
@@ -222,8 +224,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
@@ -280,10 +292,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         );
 
       case _DesktopView.sessions:
-        return SessionsScreen(
-          controller: _ws,
-          onCreateSession: _showCreateSessionDialog,
-        );
+        return SessionsScreen(controller: _ws);
 
       case _DesktopView.documents:
         return _ws.selectedDocument == null || _ws.quillController == null
@@ -528,8 +537,7 @@ class _DesktopSidebar extends StatelessWidget {
                   onPressed: controller.signOut,
                   icon: const Icon(Icons.logout_outlined, size: 18),
                   tooltip: 'Sign out',
-                  style:
-                      IconButton.styleFrom(minimumSize: const Size(34, 34)),
+                  style: IconButton.styleFrom(minimumSize: const Size(34, 34)),
                 ),
               ],
             ),
@@ -567,7 +575,8 @@ class _DesktopSidebar extends StatelessWidget {
                     icon: const Icon(Icons.layers_outlined, size: 18),
                     tooltip: 'New template',
                     style: IconButton.styleFrom(
-                        minimumSize: const Size(34, 34)),
+                      minimumSize: const Size(34, 34),
+                    ),
                   ),
                 ],
               ),
@@ -595,7 +604,8 @@ class _DesktopSidebar extends StatelessWidget {
                     icon: const Icon(Icons.add, size: 18),
                     tooltip: 'New document',
                     style: IconButton.styleFrom(
-                        minimumSize: const Size(34, 34)),
+                      minimumSize: const Size(34, 34),
+                    ),
                   ),
                 ],
               ),
@@ -614,44 +624,43 @@ class _DesktopSidebar extends StatelessWidget {
                       ),
                     )
                   : controller.activeTemplate == null
-                      ? ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 4,
+                  ? ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      itemCount: docs.length,
+                      itemBuilder: (ctx, i) {
+                        final doc = docs[i];
+                        return DocumentListTile(
+                          document: doc,
+                          isSelected: controller.selectedDocument?.id == doc.id,
+                          onTap: () => controller.selectDocument(doc),
+                        );
+                      },
+                    )
+                  : ReorderableListView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      onReorder: controller.reorderDocuments,
+                      children: [
+                        for (final doc in docs)
+                          DocumentListTile(
+                            key: ValueKey(doc.id),
+                            document: doc,
+                            isSelected:
+                                controller.selectedDocument?.id == doc.id,
+                            onTap: () => controller.selectDocument(doc),
+                            trailing: Icon(
+                              Icons.drag_handle,
+                              size: 18,
+                              color: cs.onSurfaceVariant,
+                            ),
                           ),
-                          itemCount: docs.length,
-                          itemBuilder: (ctx, i) {
-                            final doc = docs[i];
-                            return DocumentListTile(
-                              document: doc,
-                              isSelected:
-                                  controller.selectedDocument?.id == doc.id,
-                              onTap: () => controller.selectDocument(doc),
-                            );
-                          },
-                        )
-                      : ReorderableListView(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 4,
-                          ),
-                          onReorder: controller.reorderDocuments,
-                          children: [
-                            for (final doc in docs)
-                              DocumentListTile(
-                                key: ValueKey(doc.id),
-                                document: doc,
-                                isSelected:
-                                    controller.selectedDocument?.id == doc.id,
-                                onTap: () => controller.selectDocument(doc),
-                                trailing: Icon(
-                                  Icons.drag_handle,
-                                  size: 18,
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                          ],
-                        ),
+                      ],
+                    ),
             ),
           ] else
             // Spacer for non-documents views
@@ -684,14 +693,11 @@ class _ViewSwitcher extends StatelessWidget {
       return InkWell(
         onTap: () => onViewChanged(view),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: isSelected
               ? BoxDecoration(
                   color: cs.primaryContainer.withAlpha(120),
-                  border: Border(
-                    left: BorderSide(color: cs.primary, width: 2),
-                  ),
+                  border: Border(left: BorderSide(color: cs.primary, width: 2)),
                 )
               : null,
           child: Row(
@@ -706,9 +712,7 @@ class _ViewSwitcher extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: isSelected
-                      ? FontWeight.w600
-                      : FontWeight.normal,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                   color: isSelected ? cs.primary : cs.onSurface,
                 ),
               ),
@@ -726,19 +730,18 @@ class _ViewSwitcher extends StatelessWidget {
         InkWell(
           onTap: onSearch,
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                Icon(Icons.search_outlined,
-                    size: 16, color: cs.onSurfaceVariant),
+                Icon(
+                  Icons.search_outlined,
+                  size: 16,
+                  color: cs.onSurfaceVariant,
+                ),
                 const SizedBox(width: 10),
                 Text(
                   'Search',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: cs.onSurface,
-                  ),
+                  style: TextStyle(fontSize: 13, color: cs.onSurface),
                 ),
               ],
             ),

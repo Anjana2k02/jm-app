@@ -65,14 +65,18 @@ class _WorkspaceHostScreenState extends State<WorkspaceHostScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.cloud_off_outlined,
-                        size: 56,
-                        color: Theme.of(context).colorScheme.error),
+                    Icon(
+                      Icons.cloud_off_outlined,
+                      size: 56,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                     const SizedBox(height: 16),
                     const Text(
                       'Could not connect to Supabase',
                       style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w600),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
@@ -80,8 +84,7 @@ class _WorkspaceHostScreenState extends State<WorkspaceHostScreen> {
                       _controller.loadError!,
                       style: TextStyle(
                         fontSize: 12,
-                        color:
-                            Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -263,17 +266,23 @@ class _MobileLayoutState extends State<_MobileLayout> {
     );
 
     if (result != true || nameCtrl.text.trim().isEmpty) return;
-    await _ws.createSession(
-      nameCtrl.text.trim(),
-      selectedDate,
-      notesCtrl.text,
-    );
+    await _ws.createSession(nameCtrl.text.trim(), selectedDate, notesCtrl.text);
   }
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
@@ -290,12 +299,10 @@ class _MobileLayoutState extends State<_MobileLayout> {
               // 0 — Home
               HomeScreen(
                 controller: _ws,
-                onGoToDocuments: () =>
-                    setState(() => _currentTab = _tabDocs),
+                onGoToDocuments: () => setState(() => _currentTab = _tabDocs),
                 onGoToSessions: () =>
                     setState(() => _currentTab = _tabSessions),
-                onShowTemplates: () =>
-                    setState(() => _currentTab = _tabDocs),
+                onShowTemplates: () => setState(() => _currentTab = _tabDocs),
               ),
               // 1 — Documents
               _MobileDocListTab(
@@ -307,10 +314,7 @@ class _MobileLayoutState extends State<_MobileLayout> {
                 onCreateDoc: _showCreateDocDialog,
               ),
               // 2 — Sessions
-              SessionsScreen(
-                controller: _ws,
-                onCreateSession: _showCreateSessionDialog,
-              ),
+              SessionsScreen(controller: _ws),
               // 3 — Settings
               _MobileSettingsTab(controller: _ws),
             ],
@@ -322,12 +326,12 @@ class _MobileLayoutState extends State<_MobileLayout> {
                   label: const Text('New Document'),
                 )
               : _currentTab == _tabSessions
-                  ? FloatingActionButton.extended(
-                      onPressed: _showCreateSessionDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('New Session'),
-                    )
-                  : null,
+              ? FloatingActionButton.extended(
+                  onPressed: _showCreateSessionDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('New Session'),
+                )
+              : null,
           bottomNavigationBar: NavigationBar(
             selectedIndex: _currentTab,
             onDestinationSelected: (i) => setState(() => _currentTab = i),
@@ -386,10 +390,8 @@ class _MobileDocListTab extends StatelessWidget {
             tooltip: 'Search',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => SearchScreen(
-                  controller: controller,
-                  onGoToSessions: () {},
-                ),
+                builder: (_) =>
+                    SearchScreen(controller: controller, onGoToSessions: () {}),
               ),
             ),
           ),
@@ -403,39 +405,38 @@ class _MobileDocListTab extends StatelessWidget {
       body: controller.loading
           ? const Center(child: CircularProgressIndicator())
           : docs.isEmpty
-              ? EmptyState(
-                  icon: Icons.article_outlined,
-                  title: 'No documents yet',
-                  subtitle:
-                      'Tap the button below to create your first document.',
-                  action: FilledButton.icon(
-                    onPressed: onCreateDoc,
-                    icon: const Icon(Icons.add),
-                    label: const Text('New document'),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: controller.loadAll,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    itemCount: docs.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 4),
-                    itemBuilder: (ctx, i) {
-                      final doc = docs[i];
-                      return DocumentListTile(
-                        document: doc,
-                        isSelected: false,
-                        onTap: () {
-                          controller.selectDocument(doc);
-                          onDocTap();
-                        },
-                      );
-                    },
-                  ),
+          ? EmptyState(
+              icon: Icons.article_outlined,
+              title: 'No documents yet',
+              subtitle: 'Tap the button below to create your first document.',
+              action: FilledButton.icon(
+                onPressed: onCreateDoc,
+                icon: const Icon(Icons.add),
+                label: const Text('New document'),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: controller.loadAll,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
                 ),
+                itemCount: docs.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
+                itemBuilder: (ctx, i) {
+                  final doc = docs[i];
+                  return DocumentListTile(
+                    document: doc,
+                    isSelected: false,
+                    onTap: () {
+                      controller.selectDocument(doc);
+                      onDocTap();
+                    },
+                  );
+                },
+              ),
+            ),
     );
   }
 }
@@ -488,10 +489,7 @@ class _MobileSettingsTab extends StatelessWidget {
             child: Card(
               child: ListTile(
                 leading: Icon(Icons.logout_outlined, color: cs.error),
-                title: Text(
-                  'Sign out',
-                  style: TextStyle(color: cs.error),
-                ),
+                title: Text('Sign out', style: TextStyle(color: cs.error)),
                 onTap: controller.signOut,
               ),
             ),
@@ -501,4 +499,3 @@ class _MobileSettingsTab extends StatelessWidget {
     );
   }
 }
-

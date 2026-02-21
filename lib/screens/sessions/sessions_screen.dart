@@ -2,25 +2,52 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/workspace_controller.dart';
 import '../../models/session_model.dart';
+import '../../widgets/create_session_modal.dart';
 import '../../widgets/empty_state.dart';
 import 'session_detail_screen.dart';
 
 class SessionsScreen extends StatelessWidget {
-  const SessionsScreen({
-    super.key,
-    required this.controller,
-    required this.onCreateSession,
-  });
+  const SessionsScreen({super.key, required this.controller});
 
   final WorkspaceController controller;
-  final VoidCallback onCreateSession;
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  Future<void> _createSession(BuildContext context) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const CreateSessionModal(),
+    );
+
+    if (result != null) {
+      await controller.createSession(
+        result['name'] as String,
+        result['sessionDate'] as DateTime?,
+        result['notes'] as String? ?? '',
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Session created')));
+      }
+    }
   }
 
   @override
@@ -35,7 +62,7 @@ class SessionsScreen extends StatelessWidget {
               title: 'No sessions yet',
               subtitle: 'Create your first practice or jam session.',
               action: FilledButton.icon(
-                onPressed: onCreateSession,
+                onPressed: () => _createSession(context),
                 icon: const Icon(Icons.add),
                 label: const Text('New Session'),
               ),
@@ -49,13 +76,11 @@ class SessionsScreen extends StatelessWidget {
                 formatDate: _formatDate,
               ),
             ),
-      floatingActionButton: sessions.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: onCreateSession,
-              icon: const Icon(Icons.add),
-              label: const Text('New Session'),
-            ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _createSession(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New Session'),
+      ),
     );
   }
 }
@@ -84,10 +109,8 @@ class _SessionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => SessionDetailScreen(
-              controller: controller,
-              session: session,
-            ),
+            builder: (_) =>
+                SessionDetailScreen(controller: controller, session: session),
           ),
         ),
         child: Padding(

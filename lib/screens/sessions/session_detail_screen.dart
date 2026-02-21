@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 
 import '../../controllers/workspace_controller.dart';
 import '../../models/document_model.dart';
 import '../../models/session_model.dart';
 import '../../models/session_song_model.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/song_card.dart';
 
 class SessionDetailScreen extends StatefulWidget {
   const SessionDetailScreen({
@@ -24,8 +25,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   late JamSession _session;
   List<SessionSong> _songs = [];
   bool _loadingSongs = true;
+  bool _sidebarVisible = true; // togglable on mobile only
+  int _selectedIndex = 0;
+  QuillController? _quillController;
 
   WorkspaceController get _ws => widget.controller;
+
+  bool get _isMobile => MediaQuery.of(context).size.width < 600;
 
   @override
   void initState() {
@@ -34,24 +40,243 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     _loadSongs();
   }
 
+  @override
+  void dispose() {
+    _quillController?.dispose();
+    super.dispose();
+  }
+
+  // ─── Data ──────────────────────────────────────────────────────────────────
+
   Future<void> _loadSongs() async {
     setState(() => _loadingSongs = true);
     final songs = await _ws.loadSessionSongs(_session.id);
-    if (mounted) {
-      setState(() {
-        _songs = songs;
-        _loadingSongs = false;
-      });
+    if (!mounted) return;
+    setState(() {
+      _songs = songs;
+      _loadingSongs = false;
+      if (_songs.isNotEmpty) {
+        _selectedIndex = _selectedIndex.clamp(0, _songs.length - 1);
+        _rebuildController();
+      } else {
+        _selectedIndex = 0;
+        _quillController?.dispose();
+        _quillController = null;
+      }
+    });
+  }
+
+  void _rebuildController() {
+    _quillController?.dispose();
+    _quillController = null;
+    final doc = _selectedDoc;
+    if (doc == null) return;
+    final quillDoc = doc.content.isEmpty
+        ? Document()
+        : Document.fromJson(doc.content);
+    _quillController = QuillController(
+      document: quillDoc,
+      selection: const TextSelection.collapsed(offset: 0),
+      readOnly: true,
+    );
+  }
+
+  AppDocument? get _selectedDoc {
+    if (_songs.isEmpty || _selectedIndex >= _songs.length) return null;
+    final docId = _songs[_selectedIndex].documentId;
+    try {
+      return _ws.documents.firstWhere((d) => d.id == docId);
+    } catch (_) {
+      return null;
     }
   }
 
-  String _formatDate(DateTime date) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  // ─── Navigation ────────────────────────────────────────────────────────────
+
+  void _selectSong(int index) {
+    if (_selectedIndex == index && _quillController != null) return;
+    setState(() {
+      _selectedIndex = index;
+      _rebuildController();
+    });
   }
+
+  void _goToPrev() {
+    if (_selectedIndex > 0) _selectSong(_selectedIndex - 1);
+  }
+
+  void _goToNext() {
+    if (_selectedIndex < _songs.length - 1) _selectSong(_selectedIndex + 1);
+  }
+
+  // ─── Song Management ───────────────────────────────────────────────────────
+
+  Future<void> _reorderSongs(int oldIndex, int newIndex) async {
+    final user = _ws.client.auth.currentUser;
+    if (user == null) return;
+
+    final list = List<SessionSong>.from(_songs);
+    if (newIndex > oldIndex) newIndex -= 1;
+
+    // Track the selected song through the reorder
+    final selectedDocId =
+        _songs.isNotEmpty ? _songs[_selectedIndex].documentId : null;
+
+    final moved = list.removeAt(oldIndex);
+    list.insert(newIndex, moved);
+
+    int newSelected = _selectedIndex;
+    if (selectedDocId != null) {
+      final idx = list.indexWhere((s) => s.documentId == selectedDocId);
+      if (idx != -1) newSelected = idx;
+    }
+
+    setState(() {
+      _songs = list;
+      _selectedIndex = newSelected;
+    });
+
+    await _ws.sessionService.upsertSessionSongOrder(
+      userId: user.id,
+      sessionId: _session.id,
+      documentIds: list.map((s) => s.documentId).toList(),
+    );
+  }
+
+  Future<void> _removeSong(SessionSong song) async {
+    await _ws.sessionService.removeSongFromSession(
+      sessionId: _session.id,
+      documentId: song.documentId,
+    );
+    await _loadSongs();
+  }
+
+  Future<void> _showAddSongsSheet() async {
+    final existingIds = _songs.map((s) => s.documentId).toSet();
+    final available =
+        _ws.documents.where((d) => !existingIds.contains(d.id)).toList();
+
+    if (available.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All songs are already in this session'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final selected = <String>{};
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (_, scrollCtrl) => Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Add Songs',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  itemCount: available.length,
+                  itemBuilder: (_, i) {
+                    final doc = available[i];
+                    final checked = selected.contains(doc.id);
+                    return CheckboxListTile(
+                      value: checked,
+                      onChanged: (_) => setSheet(() {
+                        if (checked) {
+                          selected.remove(doc.id);
+                        } else {
+                          selected.add(doc.id);
+                        }
+                      }),
+                      title: Text(
+                        doc.title.isEmpty ? 'Untitled' : doc.title,
+                      ),
+                      secondary: const Icon(Icons.music_note_outlined),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed:
+                        selected.isEmpty ? null : () => Navigator.pop(ctx),
+                    child: Text(
+                      selected.isEmpty
+                          ? 'Select songs to add'
+                          : 'Add ${selected.length} song${selected.length == 1 ? '' : 's'}',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selected.isEmpty || !mounted) return;
+
+    final user = _ws.client.auth.currentUser;
+    if (user == null) return;
+
+    for (int i = 0; i < selected.length; i++) {
+      await _ws.sessionService.addSongToSession(
+        userId: user.id,
+        sessionId: _session.id,
+        documentId: selected.elementAt(i),
+        sortOrder: _songs.length + i,
+      );
+    }
+    await _loadSongs();
+  }
+
+  // ─── Session Edit / Delete ─────────────────────────────────────────────────
 
   Future<void> _showEditDialog() async {
     final nameCtrl = TextEditingController(text: _session.name);
@@ -72,7 +297,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   controller: nameCtrl,
                   autofocus: true,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Session name'),
+                  decoration:
+                      const InputDecoration(labelText: 'Session name'),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -148,9 +374,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       clearDate: clearDate,
       notes: notesCtrl.text,
     );
-
     await _ws.updateSession(updated, clearDate: clearDate);
-
     if (mounted) setState(() => _session = updated);
   }
 
@@ -182,272 +406,348 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
-  Future<void> _showAddSongSheet() async {
-    final existingIds = _songs.map((s) => s.documentId).toSet();
-    final available =
-        _ws.documents.where((d) => !existingIds.contains(d.id)).toList();
-
-    if (available.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All songs are already in the setlist')),
-        );
-      }
-      return;
-    }
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.4,
-        expand: false,
-        builder: (ctx, scrollCtrl) => Column(
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Theme.of(ctx).colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  const Text(
-                    'Add to setlist',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollCtrl,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: available.length,
-                itemBuilder: (_, i) {
-                  final doc = available[i];
-                  return ListTile(
-                    leading: const Icon(Icons.music_note_outlined),
-                    title: Text(
-                      doc.title.isEmpty ? 'Untitled' : doc.title,
-                    ),
-                    onTap: () async {
-                      Navigator.pop(ctx);
-                      await _addSong(doc);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  String _formatDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
-  Future<void> _addSong(AppDocument doc) async {
-    final user = _ws.client.auth.currentUser;
-    if (user == null) return;
-
-    await _ws.sessionService.addSongToSession(
-      userId: user.id,
-      sessionId: _session.id,
-      documentId: doc.id,
-      sortOrder: _songs.length,
-    );
-    await _loadSongs();
-  }
-
-  Future<void> _removeSong(SessionSong song) async {
-    await _ws.sessionService.removeSongFromSession(
-      sessionId: _session.id,
-      documentId: song.documentId,
-    );
-    await _loadSongs();
-  }
-
-  Future<void> _reorderSongs(int oldIndex, int newIndex) async {
-    final user = _ws.client.auth.currentUser;
-    if (user == null) return;
-
-    final list = List<SessionSong>.from(_songs);
-    if (newIndex > oldIndex) newIndex -= 1;
-    final moved = list.removeAt(oldIndex);
-    list.insert(newIndex, moved);
-
-    setState(() => _songs = list);
-
-    await _ws.sessionService.upsertSessionSongOrder(
-      userId: user.id,
-      sessionId: _session.id,
-      documentIds: list.map((s) => s.documentId).toList(),
-    );
-  }
+  // ─── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final docMap = {for (final d in _ws.documents) d.id: d};
-
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(_session.name),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Edit session',
-            onPressed: _showEditDialog,
-          ),
-          IconButton(
-            icon: Icon(Icons.delete_outline, color: cs.error),
-            tooltip: 'Delete session',
-            onPressed: _confirmDelete,
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'edit') _showEditDialog();
+              if (v == 'delete') _confirmDelete();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('Edit session')),
+              PopupMenuItem(value: 'delete', child: Text('Delete session')),
+            ],
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Session info card
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today_outlined,
-                            size: 16, color: cs.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          _session.sessionDate != null
-                              ? _formatDate(_session.sessionDate!)
-                              : 'No date set',
-                          style: const TextStyle(fontSize: 14),
+      body: _isMobile ? _buildMobileBody() : _buildDesktopBody(),
+    );
+  }
+
+  // ─── Desktop layout: sidebar always visible ────────────────────────────────
+
+  Widget _buildDesktopBody() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: 280,
+          child: _buildSidebar(showCollapseButton: false),
+        ),
+        const VerticalDivider(width: 1, thickness: 1),
+        Expanded(child: _buildContentArea()),
+      ],
+    );
+  }
+
+  // ─── Mobile layout: sidebar toggleable via < / > ──────────────────────────
+
+  Widget _buildMobileBody() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Sidebar (shown only when _sidebarVisible)
+        if (_sidebarVisible) ...[
+          SizedBox(
+            width: screenWidth * 0.72,
+            child: _buildSidebar(showCollapseButton: true),
+          ),
+          const VerticalDivider(width: 1, thickness: 1),
+        ],
+        // Content area + expand tab
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildContentArea(),
+              // ">" tab on the left edge — only shown when sidebar is hidden
+              if (!_sidebarVisible)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _sidebarVisible = true),
+                      child: Container(
+                        width: 20,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          borderRadius: const BorderRadius.horizontal(
+                            right: Radius.circular(8),
+                          ),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
                         ),
-                      ],
-                    ),
-                    if (_session.notes.isNotEmpty) ...[
-                      const Divider(height: 20),
-                      Text(
-                        _session.notes,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: cs.onSurfaceVariant,
+                        child: Icon(
+                          Icons.chevron_right,
+                          size: 16,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Setlist header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 8, 4),
-            child: Row(
-              children: [
-                Text(
-                  'SETLIST',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, size: 22),
-                  tooltip: 'Add song',
-                  onPressed: _showAddSongSheet,
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Sidebar ───────────────────────────────────────────────────────────────
+
+  Widget _buildSidebar({required bool showCollapseButton}) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      color: cs.surfaceContainerLow,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header: Add Songs + optional collapse button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: _showAddSongsSheet,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 16),
+                        SizedBox(width: 6),
+                        Text('Add Songs'),
+                      ],
+                    ),
+                  ),
                 ),
+                if (showCollapseButton) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, size: 20),
+                    tooltip: 'Collapse sidebar',
+                    onPressed: () => setState(() => _sidebarVisible = false),
+                  ),
+                ],
               ],
             ),
           ),
+          const Divider(height: 1, thickness: 1),
 
-          // Setlist body
+          // Song list
           Expanded(
             child: _loadingSongs
                 ? const Center(child: CircularProgressIndicator())
                 : _songs.isEmpty
-                    ? const EmptyState(
-                        icon: Icons.music_note_outlined,
-                        title: 'No songs yet',
-                        subtitle: 'Tap + to add songs to this setlist.',
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.music_note_outlined,
+                                size: 40,
+                                color: cs.outlineVariant,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'No songs yet',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Tap "Add Songs" above.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       )
                     : ReorderableListView.builder(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
+                          vertical: 8,
+                          horizontal: 8,
                         ),
                         itemCount: _songs.length,
                         onReorder: _reorderSongs,
                         itemBuilder: (_, i) {
                           final song = _songs[i];
-                          final doc = docMap[song.documentId];
-                          return ListTile(
+                          AppDocument? doc;
+                          try {
+                            doc = _ws.documents
+                                .firstWhere((d) => d.id == song.documentId);
+                          } catch (_) {}
+
+                          if (doc == null) {
+                            return SizedBox.shrink(
+                              key: ValueKey(song.documentId),
+                            );
+                          }
+
+                          return SongCard(
                             key: ValueKey(song.documentId),
-                            leading: CircleAvatar(
-                              radius: 16,
-                              backgroundColor: cs.primaryContainer,
-                              child: Text(
-                                '${i + 1}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: cs.primary,
-                                ),
-                              ),
-                            ),
-                            title: Text(
-                              doc?.title.isEmpty ?? true
-                                  ? 'Untitled'
-                                  : doc!.title,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w500),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(Icons.remove_circle_outline,
-                                      size: 20, color: cs.error),
-                                  tooltip: 'Remove',
-                                  onPressed: () => _removeSong(song),
-                                ),
-                                const Icon(Icons.drag_handle, size: 20),
-                              ],
-                            ),
+                            document: doc,
+                            index: i,
+                            isSelected: _selectedIndex == i,
+                            onTap: () => _selectSong(i),
+                            onRemove: () => _removeSong(song),
                           );
                         },
                       ),
           ),
         ],
       ),
+    );
+  }
+
+  // ─── Main content area ─────────────────────────────────────────────────────
+
+  Widget _buildContentArea() {
+    final cs = Theme.of(context).colorScheme;
+
+    if (_loadingSongs) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_songs.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.queue_music_outlined, size: 64, color: cs.outlineVariant),
+            const SizedBox(height: 16),
+            Text(
+              'No songs in this session',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add songs using the sidebar.',
+              style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final doc = _selectedDoc;
+    final controller = _quillController;
+
+    if (doc == null || controller == null) {
+      return Center(
+        child: Text(
+          'Song not found.',
+          style: TextStyle(color: cs.onSurfaceVariant),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Song title + position counter
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                doc.title.isEmpty ? 'Untitled' : doc.title,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Song ${_selectedIndex + 1} of ${_songs.length}',
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+
+        // Read-only Quill content (scrollable independently)
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            child: QuillEditor.basic(
+              controller: controller,
+              config: const QuillEditorConfig(
+                enableInteractiveSelection: true,
+              ),
+            ),
+          ),
+        ),
+
+        const Divider(height: 1),
+
+        // Prev / Next navigation
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              TextButton.icon(
+                onPressed: _selectedIndex > 0 ? _goToPrev : null,
+                icon: const Icon(Icons.arrow_back, size: 16),
+                label: const Text('Prev'),
+              ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _selectedIndex < _songs.length - 1
+                    ? _goToNext
+                    : null,
+                icon: const Icon(Icons.arrow_forward, size: 16),
+                label: const Text('Next'),
+                iconAlignment: IconAlignment.end,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
