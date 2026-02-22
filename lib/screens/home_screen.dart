@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/workspace_controller.dart';
+import '../theme/app_colors.dart';
+import '../utils/formatters.dart';
+import '../utils/haptics.dart';
 import '../widgets/document_list_tile.dart';
 import '../widgets/feature_card.dart';
 import '../widgets/stat_card.dart';
@@ -36,14 +39,6 @@ class HomeScreen extends StatelessWidget {
     return ', ${name[0].toUpperCase()}${name.substring(1)}';
   }
 
-  String _formatDate(DateTime date) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -75,7 +70,6 @@ class HomeScreen extends StatelessWidget {
               onGoToDocuments: onGoToDocuments,
               onGoToSessions: onGoToSessions,
               onShowTemplates: onShowTemplates,
-              formatDate: _formatDate,
             )
           : _NarrowBody(
               controller: controller,
@@ -84,7 +78,6 @@ class HomeScreen extends StatelessWidget {
               onGoToDocuments: onGoToDocuments,
               onGoToSessions: onGoToSessions,
               onShowTemplates: onShowTemplates,
-              formatDate: _formatDate,
             ),
     );
   }
@@ -99,7 +92,6 @@ class _NarrowBody extends StatelessWidget {
     required this.userName,
     required this.onGoToDocuments,
     required this.onGoToSessions,
-    required this.formatDate,
     this.onShowTemplates,
   });
 
@@ -109,7 +101,6 @@ class _NarrowBody extends StatelessWidget {
   final VoidCallback onGoToDocuments;
   final VoidCallback onGoToSessions;
   final VoidCallback? onShowTemplates;
-  final String Function(DateTime) formatDate;
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +108,9 @@ class _NarrowBody extends StatelessWidget {
     final docs = controller.documents;
     final recentDocs = docs.length > 5 ? docs.sublist(0, 5) : docs;
     final upcoming = controller.upcomingSessions;
-    final nextSessions = upcoming.length > 3 ? upcoming.sublist(0, 3) : upcoming;
+    final nextSessions = upcoming.length > 3
+        ? upcoming.sublist(0, 3)
+        : upcoming;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -141,7 +134,7 @@ class _NarrowBody extends StatelessWidget {
             children: [
               StatCard(
                 count: controller.documents.length,
-                label: 'Docs',
+                label: 'Songs',
                 icon: Icons.description_outlined,
               ),
               const SizedBox(width: 10),
@@ -169,34 +162,42 @@ class _NarrowBody extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 1.1,
+            childAspectRatio: 0.9,
             children: [
               FeatureCard(
                 title: 'Documents',
                 subtitle: '${controller.documents.length} songs',
                 icon: Icons.edit_document,
-                accentColor: const Color(0xFF3730A3),
+                accentColor: kFeatureDocuments,
                 onTap: onGoToDocuments,
               ),
               FeatureCard(
                 title: 'Sessions',
                 subtitle: '${controller.sessions.length} sessions',
                 icon: Icons.event,
-                accentColor: const Color(0xFF7C3AED),
+                accentColor: kFeatureSessions,
                 onTap: onGoToSessions,
               ),
               FeatureCard(
                 title: 'Templates',
-                subtitle: '${controller.templates.length} views',
+                subtitle: 'Coming soon',
                 icon: Icons.layers,
-                accentColor: const Color(0xFF0D9488),
-                onTap: onShowTemplates ?? onGoToDocuments,
+                accentColor: kFeatureTemplates,
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Templates feature coming soon!'),
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
               ),
               FeatureCard(
                 title: 'Search',
                 subtitle: 'Find anything',
                 icon: Icons.search,
-                accentColor: const Color(0xFFD97706),
+                accentColor: kFeatureSearch,
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => SearchScreen(
@@ -231,21 +232,23 @@ class _NarrowBody extends StatelessWidget {
               ),
             )
           else
-            ...recentDocs.map((doc) => DocumentListTile(
-                  document: doc,
-                  isSelected: false,
-                  onTap: () {
-                    controller.selectDocument(doc);
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => MobileEditorScreen(
-                          controller: controller,
-                          document: doc,
-                        ),
+            ...recentDocs.map(
+              (doc) => DocumentListTile(
+                document: doc,
+                isSelected: false,
+                onTap: () {
+                  controller.selectDocument(doc);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => MobileEditorScreen(
+                        controller: controller,
+                        document: doc,
                       ),
-                    );
-                  },
-                )),
+                    ),
+                  );
+                },
+              ),
+            ),
           const SizedBox(height: 24),
 
           // Upcoming sessions
@@ -269,11 +272,9 @@ class _NarrowBody extends StatelessWidget {
               ),
             )
           else
-            ...nextSessions.map((s) => _SessionListItem(
-                  session: s,
-                  controller: controller,
-                  formatDate: formatDate,
-                )),
+            ...nextSessions.map(
+              (s) => _SessionListItem(session: s, controller: controller),
+            ),
           const SizedBox(height: 32),
         ],
       ),
@@ -290,7 +291,6 @@ class _WideBody extends StatelessWidget {
     required this.userName,
     required this.onGoToDocuments,
     required this.onGoToSessions,
-    required this.formatDate,
     this.onShowTemplates,
   });
 
@@ -300,7 +300,6 @@ class _WideBody extends StatelessWidget {
   final VoidCallback onGoToDocuments;
   final VoidCallback onGoToSessions;
   final VoidCallback? onShowTemplates;
-  final String Function(DateTime) formatDate;
 
   @override
   Widget build(BuildContext context) {
@@ -365,12 +364,12 @@ class _WideBody extends StatelessWidget {
                   children: [
                     Expanded(
                       child: SizedBox(
-                        height: 110,
+                        height: 135,
                         child: FeatureCard(
                           title: 'Documents',
                           subtitle: '${controller.documents.length} songs',
                           icon: Icons.edit_document,
-                          accentColor: const Color(0xFF3730A3),
+                          accentColor: kFeatureDocuments,
                           onTap: onGoToDocuments,
                         ),
                       ),
@@ -378,12 +377,12 @@ class _WideBody extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: SizedBox(
-                        height: 110,
+                        height: 135,
                         child: FeatureCard(
                           title: 'Sessions',
                           subtitle: '${controller.sessions.length} sessions',
                           icon: Icons.event,
-                          accentColor: const Color(0xFF7C3AED),
+                          accentColor: kFeatureSessions,
                           onTap: onGoToSessions,
                         ),
                       ),
@@ -391,25 +390,33 @@ class _WideBody extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: SizedBox(
-                        height: 110,
+                        height: 135,
                         child: FeatureCard(
                           title: 'Templates',
-                          subtitle: '${controller.templates.length} views',
+                          subtitle: 'Coming soon',
                           icon: Icons.layers,
-                          accentColor: const Color(0xFF0D9488),
-                          onTap: onShowTemplates ?? onGoToDocuments,
+                          accentColor: kFeatureTemplates,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Templates feature coming soon!'),
+                                behavior: SnackBarBehavior.floating,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: SizedBox(
-                        height: 110,
+                        height: 135,
                         child: FeatureCard(
                           title: 'Search',
                           subtitle: 'Find anything',
                           icon: Icons.search,
-                          accentColor: const Color(0xFFD97706),
+                          accentColor: kFeatureSearch,
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => SearchScreen(
@@ -449,11 +456,13 @@ class _WideBody extends StatelessWidget {
                     ),
                   )
                 else
-                  ...recentDocs.map((doc) => DocumentListTile(
-                        document: doc,
-                        isSelected: false,
-                        onTap: () => controller.selectDocument(doc),
-                      )),
+                  ...recentDocs.map(
+                    (doc) => DocumentListTile(
+                      document: doc,
+                      isSelected: false,
+                      onTap: () => controller.selectDocument(doc),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -490,11 +499,9 @@ class _WideBody extends StatelessWidget {
                     ),
                   )
                 else
-                  ...upcoming.map((s) => _SessionListItem(
-                        session: s,
-                        controller: controller,
-                        formatDate: formatDate,
-                      )),
+                  ...upcoming.map(
+                    (s) => _SessionListItem(session: s, controller: controller),
+                  ),
               ],
             ),
           ),
@@ -526,15 +533,10 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _SessionListItem extends StatelessWidget {
-  const _SessionListItem({
-    required this.session,
-    required this.controller,
-    required this.formatDate,
-  });
+  const _SessionListItem({required this.session, required this.controller});
 
   final dynamic session;
   final WorkspaceController controller;
-  final String Function(DateTime) formatDate;
 
   @override
   Widget build(BuildContext context) {
@@ -572,10 +574,8 @@ class _SessionListItem extends StatelessWidget {
           highlightColor: accent.withValues(alpha: 0.07),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => SessionDetailScreen(
-                controller: controller,
-                session: session,
-              ),
+              builder: (_) =>
+                  SessionDetailScreen(controller: controller, session: session),
             ),
           ),
           child: Padding(

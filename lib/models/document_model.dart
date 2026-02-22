@@ -88,8 +88,10 @@ class AppDocument {
       userId: map['user_id'] as String,
       title: (map['title'] as String?) ?? 'Untitled',
       content: (map['content'] as List<dynamic>?) ?? const [],
-      createdAt: DateTime.parse(map['created_at'] as String),
-      updatedAt: DateTime.parse(map['updated_at'] as String),
+      createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ??
+          DateTime.now(),
+      updatedAt: DateTime.tryParse(map['updated_at'] as String? ?? '') ??
+          DateTime.now(),
       songType: SongType.fromString(map['song_type'] as String?),
       songKey: map['song_key'] as String?,
       bpm: map['bpm'] as int?,

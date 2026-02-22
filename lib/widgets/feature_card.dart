@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/haptics.dart';
+
 class FeatureCard extends StatelessWidget {
   const FeatureCard({
     super.key,
@@ -41,7 +43,10 @@ class FeatureCard extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          onTap: onTap,
+          onTap: () {
+            HapticsManager.lightTap();
+            onTap();
+          },
           borderRadius: BorderRadius.circular(16),
           splashColor: accentColor.withValues(alpha: 0.10),
           highlightColor: accentColor.withValues(alpha: 0.07),

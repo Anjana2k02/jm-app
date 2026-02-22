@@ -8,6 +8,7 @@ import '../../models/document_model.dart';
 import '../../utils/clipboard_to_delta_converter.dart';
 import '../../utils/chord_detector.dart';
 import '../../utils/haptics.dart';
+import '../../widgets/glass_dialog.dart';
 import '../../widgets/mobile_toolbar.dart';
 import '../../widgets/save_status_chip.dart';
 import '../../widgets/song_meta_bar.dart';
@@ -36,6 +37,7 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
 
   bool _editingTitle = false;
   bool _sidebarVisible = true;
+  bool _uploadingImage = false;
 
   WorkspaceController get _ws => widget.controller;
 
@@ -111,6 +113,7 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
   }
 
   Future<void> _insertImage() async {
+    if (_uploadingImage) return;
     final quill = _ws.quillController;
     final user = _ws.client.auth.currentUser;
     if (quill == null || user == null) return;
@@ -118,18 +121,24 @@ class _MobileEditorScreenState extends State<MobileEditorScreen> {
     final file = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
 
-    final url = await _ws.storageService.uploadImage(
-      userId: user.id,
-      file: file,
-    );
-    final index = quill.selection.baseOffset;
-    quill.replaceText(
-      index,
-      0,
-      BlockEmbed.image(url),
-      TextSelection.collapsed(offset: index + 1),
-    );
-    if (mounted) setState(() {});
+    setState(() => _uploadingImage = true);
+    try {
+      final url = await _ws.storageService.uploadImage(
+        userId: user.id,
+        file: file,
+      );
+      final index = quill.selection.baseOffset;
+      quill.replaceText(
+        index,
+        0,
+        BlockEmbed.image(url),
+        TextSelection.collapsed(offset: index + 1),
+      );
+    } catch (e) {
+      if (mounted) showGlassSnackBar(context, 'Image upload failed. Try again.');
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
   }
 
   Widget _buildEditorContent(QuillController quill, AppDocument doc) {

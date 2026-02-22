@@ -37,13 +37,13 @@ class SessionsScreen extends StatelessWidget {
     );
 
     if (result != null) {
-      await controller.createSession(
+      final ok = await controller.createSession(
         result['name'] as String,
         result['sessionDate'] as DateTime?,
         result['notes'] as String? ?? '',
       );
 
-      if (context.mounted) {
+      if (ok && context.mounted) {
         showGlassSnackBar(context, 'Session created');
       }
     }

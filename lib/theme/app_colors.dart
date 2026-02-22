@@ -4,6 +4,13 @@ import 'package:flutter/material.dart';
 const Color kSeedPrimary = Color(0xFF3730A3); // deep indigo-700
 const Color kSeedSecondary = Color(0xFF7C3AED); // violet-600
 const Color kSeedTertiary = Color(0xFFD97706); // amber-600 (FAB, CTAs)
+const Color kAccentTeal = Color(0xFF0D9488); // teal-600 (Templates)
+
+// --- Feature card accent colors ---
+const Color kFeatureDocuments = kSeedPrimary; // indigo
+const Color kFeatureSessions = kSeedSecondary; // violet
+const Color kFeatureTemplates = kAccentTeal; // teal
+const Color kFeatureSearch = kSeedTertiary; // amber
 
 // --- Light mode surface overrides ---
 const Color kSurfaceLight = Color(0xFFFAFAFC);

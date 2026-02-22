@@ -74,23 +74,109 @@ class _SongMetaBarState extends State<SongMetaBar> {
     });
   }
 
-  InputDecoration _fieldDeco(ColorScheme cs) => InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: cs.onSurface.withValues(alpha: 0.1),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
-        border: InputBorder.none,
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(
-            color: cs.outlineVariant.withValues(alpha: 0.5),
-            width: 1,
+  /// Pill-shaped container: `Label  [value field]`
+  Widget _pillField({
+    required ColorScheme cs,
+    required String label,
+    required TextEditingController ctrl,
+    required double width,
+    TextInputType keyboardType = TextInputType.text,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.45),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: cs.onSurfaceVariant,
+              letterSpacing: 0.3,
+            ),
           ),
+          const SizedBox(width: 7),
+          SizedBox(
+            width: width,
+            child: TextField(
+              controller: ctrl,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+              textCapitalization: textCapitalization,
+              keyboardType: keyboardType,
+              autocorrect: false,
+              enableSuggestions: false,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 2),
+              ),
+              onChanged: (_) => _scheduleSave(),
+              onSubmitted: (_) => _save(),
+              onEditingComplete: _save,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Standalone rounded-rect input box (used for minutes / seconds).
+  Widget _numberBox({
+    required ColorScheme cs,
+    required TextEditingController ctrl,
+    required double width,
+  }) {
+    return Container(
+      width: width,
+      height: 34,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.45),
+          width: 1,
         ),
-        focusedBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: cs.primary, width: 1.5),
+      ),
+      child: TextField(
+        controller: ctrl,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: cs.onSurface,
         ),
-      );
+        keyboardType: TextInputType.number,
+        autocorrect: false,
+        enableSuggestions: false,
+        textAlign: TextAlign.center,
+        decoration: const InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(vertical: 2),
+        ),
+        onChanged: (_) => _scheduleSave(),
+        onSubmitted: (_) => _save(),
+        onEditingComplete: _save,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,107 +189,48 @@ class _SongMetaBarState extends State<SongMetaBar> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          // Key
-          Text(
-            'Key',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurfaceVariant,
-            ),
+          // ── Key ─────────────────────────────────────────────────────────
+          _pillField(
+            cs: cs,
+            label: 'Key',
+            ctrl: _keyCtrl,
+            width: 44,
+            textCapitalization: TextCapitalization.characters,
           ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 72,
-            child: TextField(
-              controller: _keyCtrl,
-              style: const TextStyle(fontSize: 12),
-              textCapitalization: TextCapitalization.characters,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: _fieldDeco(cs),
-              onChanged: (_) => _scheduleSave(),
-              onSubmitted: (_) => _save(),
-              onEditingComplete: _save,
-            ),
+          const SizedBox(width: 10),
+
+          // ── BPM ─────────────────────────────────────────────────────────
+          _pillField(
+            cs: cs,
+            label: 'BPM',
+            ctrl: _bpmCtrl,
+            width: 40,
+            keyboardType: TextInputType.number,
           ),
+          const SizedBox(width: 10),
 
-          const SizedBox(width: 16),
-
-          // BPM
-          Text(
-            'BPM',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 58,
-            child: TextField(
-              controller: _bpmCtrl,
-              style: const TextStyle(fontSize: 12),
-              keyboardType: TextInputType.number,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: _fieldDeco(cs),
-              onChanged: (_) => _scheduleSave(),
-              onSubmitted: (_) => _save(),
-              onEditingComplete: _save,
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // Duration
+          // ── Duration ─────────────────────────────────────────────────────
           Text(
             'Duration',
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: cs.onSurfaceVariant,
+              letterSpacing: 0.3,
             ),
           ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 40,
-            child: TextField(
-              controller: _minCtrl,
-              style: const TextStyle(fontSize: 12),
-              keyboardType: TextInputType.number,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: _fieldDeco(cs),
-              onChanged: (_) => _scheduleSave(),
-              onSubmitted: (_) => _save(),
-              onEditingComplete: _save,
-            ),
-          ),
+          const SizedBox(width: 8),
+          _numberBox(cs: cs, ctrl: _minCtrl, width: 36),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 5),
             child: Text(
               'm',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ),
-          SizedBox(
-            width: 40,
-            child: TextField(
-              controller: _secCtrl,
-              style: const TextStyle(fontSize: 12),
-              keyboardType: TextInputType.number,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: _fieldDeco(cs),
-              onChanged: (_) => _scheduleSave(),
-              onSubmitted: (_) => _save(),
-              onEditingComplete: _save,
-            ),
-          ),
+          _numberBox(cs: cs, ctrl: _secCtrl, width: 36),
           Padding(
-            padding: const EdgeInsets.only(left: 4),
+            padding: const EdgeInsets.only(left: 5),
             child: Text(
               's',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),

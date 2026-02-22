@@ -8,6 +8,7 @@ import '../../models/template_model.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/document_list_tile.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/glass_dialog.dart';
 import '../../widgets/save_status_chip.dart';
 import '../../widgets/song_meta_bar.dart';
 import '../home_screen.dart';
@@ -26,6 +27,7 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
   final _imagePicker = ImagePicker();
+  bool _uploadingImage = false;
 
   // Rail destinations: 0=Home, 1=Documents, 2=Sessions, 3=Settings
   int _selectedNavIndex = 0;
@@ -33,13 +35,28 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
   WorkspaceController get _ws => widget.controller;
 
   @override
+  void initState() {
+    super.initState();
+    _ws.addListener(_onControllerChange);
+  }
+
+  @override
   void dispose() {
+    _ws.removeListener(_onControllerChange);
     _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
+  void _onControllerChange() {
+    final err = _ws.operationError;
+    if (err != null && mounted) {
+      showGlassSnackBar(context, err);
+    }
+  }
+
   Future<void> _insertImage() async {
+    if (_uploadingImage) return;
     final controller = _ws.quillController;
     final user = _ws.client.auth.currentUser;
     if (controller == null || user == null) return;
@@ -47,18 +64,24 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
     final file = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
 
-    final url = await _ws.storageService.uploadImage(
-      userId: user.id,
-      file: file,
-    );
-    final index = controller.selection.baseOffset;
-    controller.replaceText(
-      index,
-      0,
-      BlockEmbed.image(url),
-      TextSelection.collapsed(offset: index + 1),
-    );
-    if (mounted) setState(() {});
+    setState(() => _uploadingImage = true);
+    try {
+      final url = await _ws.storageService.uploadImage(
+        userId: user.id,
+        file: file,
+      );
+      final index = controller.selection.baseOffset;
+      controller.replaceText(
+        index,
+        0,
+        BlockEmbed.image(url),
+        TextSelection.collapsed(offset: index + 1),
+      );
+    } catch (e) {
+      if (mounted) showGlassSnackBar(context, 'Image upload failed. Try again.');
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
   }
 
   Future<void> _showCreateDocDialog() async {
@@ -134,7 +157,9 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
       ),
     );
     if (result == null || result.title.trim().isEmpty) return;
-    if (mounted) await _ws.createDocument(result.title, result.type);
+    if (!mounted) return;
+    final ok = await _ws.createDocument(result.title, result.type);
+    if (ok && mounted) showGlassSnackBar(context, 'Song created');
   }
 
   Future<void> _showCreateTemplateDialog() async {
@@ -243,7 +268,8 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
     );
 
     if (result != true || nameCtrl.text.trim().isEmpty) return;
-    await _ws.createSession(nameCtrl.text.trim(), selectedDate, notesCtrl.text);
+    final ok = await _ws.createSession(nameCtrl.text.trim(), selectedDate, notesCtrl.text);
+    if (ok && mounted) showGlassSnackBar(context, 'Session created');
   }
 
   String _formatDate(DateTime date) {

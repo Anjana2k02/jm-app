@@ -67,9 +67,9 @@ class _NoConnectionScreenState extends State<NoConnectionScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Offline illustration from public/no_conection.png
+              // Offline illustration from public/no_connection.png
               Image.asset(
-                'public/no_conection.png',
+                'public/no_connection.png',
                 width: 240,
                 height: 240,
                 fit: BoxFit.contain,

@@ -10,6 +10,7 @@ import '../../models/session_song_model.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/haptics.dart';
 import '../../widgets/glass_dialog.dart';
+import '../../widgets/dismissible_container.dart';
 import '../../widgets/song_card.dart';
 
 class SessionDetailScreen extends StatefulWidget {
@@ -285,8 +286,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               const SizedBox(height: 12),
               Builder(
                 builder: (ctx2) {
-                  final isDark2 =
-                      Theme.of(ctx2).brightness == Brightness.dark;
+                  final isDark2 = Theme.of(ctx2).brightness == Brightness.dark;
                   return Container(
                     width: 36,
                     height: 4,
@@ -582,8 +582,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       ),
     );
     if (confirmed != true) return;
-    await _ws.deleteSession(_session.id);
-    if (mounted) Navigator.of(context).pop();
+    final ok = await _ws.deleteSession(_session.id);
+    if (!mounted) return;
+    if (ok) Navigator.of(context).pop();
   }
 
   String _formatDate(DateTime date) {
@@ -880,33 +881,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                         direction: DismissDirection.endToStart,
                         confirmDismiss: (_) => _confirmRemoveSong(song),
                         onDismissed: (_) => _removeSong(song),
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 22),
-                          margin: const EdgeInsets.symmetric(vertical: 3),
-                          decoration: BoxDecoration(
-                            color: cs.errorContainer,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.delete_outline,
-                                color: cs.onErrorContainer,
-                                size: 22,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Remove',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: cs.onErrorContainer,
-                                ),
-                              ),
-                            ],
-                          ),
+                        background: buildDismissibleBackground(
+                          context,
+                          label: 'Remove',
+                          icon: Icons.delete_outline,
                         ),
                         child: ReorderableDelayedDragStartListener(
                           index: i,

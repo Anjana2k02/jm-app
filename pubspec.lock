@@ -380,7 +380,7 @@ packages:
     source: hosted
     version: "11.5.0"
   flutter_quill_delta_from_html:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: flutter_quill_delta_from_html
       sha256: "0eb801ea8dd498cadc057507af5da794d4c9599ce58b2569cb3d4bb53ba8bed2"
@@ -438,7 +438,7 @@ packages:
     source: hosted
     version: "2.1.0"
   html:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: html
       sha256: "6d1264f2dffa1b1101c25a91dff0dc2daee4c18e87cd8538729773c073dbf602"

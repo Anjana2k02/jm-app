@@ -5,6 +5,7 @@ import '../models/document_model.dart';
 import '../services/connectivity_service.dart';
 import '../widgets/document_list_tile.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass_dialog.dart';
 import 'home_screen.dart';
 import 'mobile/mobile_editor_screen.dart';
 import 'search_screen.dart';
@@ -37,13 +38,22 @@ class _WorkspaceHostScreenState extends State<WorkspaceHostScreen> {
     _controller = WorkspaceController();
     _wasOnline = widget.connectivity.isOnline;
     widget.connectivity.addListener(_onConnectivityChanged);
+    _controller.addListener(_onControllerChange);
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerChange);
     widget.connectivity.removeListener(_onConnectivityChanged);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onControllerChange() {
+    final err = _controller.operationError;
+    if (err != null && mounted) {
+      showGlassSnackBar(context, err);
+    }
   }
 
   void _onConnectivityChanged() {
@@ -211,87 +221,96 @@ class _MobileLayoutState extends State<_MobileLayout> {
   Future<void> _showCreateDocDialog() async {
     final titleCtrl = TextEditingController();
     SongType selectedType = SongType.song;
+    final isMobile = MediaQuery.sizeOf(context).width < kMobileBreakpoint;
 
-    final result = await showDialog<({String title, SongType type})>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('New song'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: titleCtrl,
-                autofocus: true,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Song title',
-                  hintText: 'Untitled',
-                ),
-                onSubmitted: (_) => Navigator.pop(ctx, (
-                  title: titleCtrl.text,
-                  type: selectedType,
-                )),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Type',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-              ),
-              RadioGroup<SongType>(
-                groupValue: selectedType,
-                onChanged: (v) {
-                  if (v != null) setDialogState(() => selectedType = v);
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    RadioListTile<SongType>(
-                      title: const Text('Song'),
-                      value: SongType.song,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
+    final result =
+        await (isMobile
+            ? showGlassDialog
+            : showDialog)<({String title, SongType type})>(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setDialogState) => AlertDialog(
+              title: const Text('New song'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Song title',
+                      hintText: 'Untitled',
                     ),
-                    RadioListTile<SongType>(
-                      title: const Text('Medley'),
-                      value: SongType.medley,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
+                    onSubmitted: (_) => Navigator.pop(ctx, (
+                      title: titleCtrl.text,
+                      type: selectedType,
+                    )),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Type',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                  RadioGroup<SongType>(
+                    groupValue: selectedType,
+                    onChanged: (v) {
+                      if (v != null) setDialogState(() => selectedType = v);
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        RadioListTile<SongType>(
+                          title: const Text('Song'),
+                          value: SongType.song,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                        RadioListTile<SongType>(
+                          title: const Text('Medley'),
+                          value: SongType.medley,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, (
+                    title: titleCtrl.text,
+                    type: selectedType,
+                  )),
+                  child: const Text('Create'),
+                ),
+              ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, (
-                title: titleCtrl.text,
-                type: selectedType,
-              )),
-              child: const Text('Create'),
-            ),
-          ],
-        ),
-      ),
-    );
+        );
 
     if (result == null || result.title.trim().isEmpty) return;
-    await _ws.createDocument(result.title, result.type);
-    if (mounted && _ws.selectedDocument != null) _openEditor();
+    final ok = await _ws.createDocument(result.title, result.type);
+    if (!mounted) return;
+    if (ok && _ws.selectedDocument != null) {
+      showGlassSnackBar(context, 'Song created');
+      _openEditor();
+    }
   }
 
   Future<void> _showCreateSessionDialog() async {
     final nameCtrl = TextEditingController();
     DateTime? selectedDate;
     final notesCtrl = TextEditingController();
+    final isMobile = MediaQuery.sizeOf(context).width < kMobileBreakpoint;
 
-    final result = await showDialog<bool>(
+    final result = await (isMobile ? showGlassDialog : showDialog)<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -365,7 +384,12 @@ class _MobileLayoutState extends State<_MobileLayout> {
     );
 
     if (result != true || nameCtrl.text.trim().isEmpty) return;
-    await _ws.createSession(nameCtrl.text.trim(), selectedDate, notesCtrl.text);
+    final ok = await _ws.createSession(
+      nameCtrl.text.trim(),
+      selectedDate,
+      notesCtrl.text,
+    );
+    if (ok && mounted) showGlassSnackBar(context, 'Session created');
   }
 
   String _formatDate(DateTime date) {

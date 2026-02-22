@@ -21,18 +21,7 @@ class MobileToolbar extends StatelessWidget {
   final VoidCallback? onSmartPaste;
 
   static const List<double> _sizes = [
-    8,
-    10,
-    12,
-    14,
-    16,
-    18,
-    20,
-    24,
-    28,
-    32,
-    36,
-    48,
+    8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48,
   ];
 
   void _changeFontSize(int direction) {
@@ -62,7 +51,7 @@ class MobileToolbar extends StatelessWidget {
       backgroundColor: WidgetStatePropertyAll(cs.primaryContainer),
       foregroundColor: WidgetStatePropertyAll(cs.primary),
       shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       minimumSize: const WidgetStatePropertyAll(Size(36, 36)),
       padding: const WidgetStatePropertyAll(EdgeInsets.zero),
@@ -72,7 +61,7 @@ class MobileToolbar extends StatelessWidget {
       backgroundColor: WidgetStatePropertyAll(Colors.transparent),
       foregroundColor: WidgetStatePropertyAll(cs.onSurfaceVariant),
       shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       minimumSize: const WidgetStatePropertyAll(Size(36, 36)),
       padding: const WidgetStatePropertyAll(EdgeInsets.zero),
@@ -95,11 +84,12 @@ class MobileToolbar extends StatelessWidget {
           ),
         );
 
+    // Subtle vertical divider between groups
     Widget div() => Container(
       width: 1,
-      height: 22,
-      margin: const EdgeInsets.symmetric(horizontal: 5),
-      color: cs.outlineVariant,
+      height: 20,
+      margin: const EdgeInsets.symmetric(horizontal: 6),
+      color: cs.outlineVariant.withValues(alpha: 0.55),
     );
 
     Widget sizeBtn({
@@ -116,22 +106,55 @@ class MobileToolbar extends StatelessWidget {
       ),
     );
 
+    Widget iconBtn({
+      required IconData icon,
+      required VoidCallback onPressed,
+      required String tooltip,
+    }) => SizedBox(
+      width: 36,
+      height: 36,
+      child: IconButton(
+        icon: Icon(icon, size: sz, color: cs.onSurfaceVariant),
+        onPressed: onPressed,
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        style: IconButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+    );
+
     return GlassContainer(
       enableBlur: false,
       borderRadius: 0,
       height: 48,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // ── Font family ──────────────────────────────────────────────
-            QuillToolbarFontFamilyButton(
-              controller: controller,
-              options: QuillToolbarFontFamilyButtonOptions(
-                iconSize: sz,
-                iconTheme: theme,
+            Container(
+              height: 32,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.5),
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: QuillToolbarFontFamilyButton(
+                  controller: controller,
+                  options: QuillToolbarFontFamilyButtonOptions(
+                    iconSize: sz,
+                    iconTheme: theme,
+                  ),
+                ),
               ),
             ),
             div(),
@@ -160,48 +183,20 @@ class MobileToolbar extends StatelessWidget {
             // ── Image ────────────────────────────────────────────────────
             if (onImageInsert != null) ...[
               div(),
-              SizedBox(
-                width: 36,
-                height: 36,
-                child: IconButton(
-                  icon: Icon(
-                    Icons.image_outlined,
-                    size: sz,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  onPressed: onImageInsert,
-                  tooltip: 'Insert image',
-                  padding: EdgeInsets.zero,
-                  style: IconButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
+              iconBtn(
+                icon: Icons.image_outlined,
+                onPressed: onImageInsert!,
+                tooltip: 'Insert image',
               ),
             ],
 
             // ── Smart Paste ───────────────────────────────────────────────
             if (onSmartPaste != null) ...[
               div(),
-              SizedBox(
-                width: 36,
-                height: 36,
-                child: IconButton(
-                  icon: Icon(
-                    Icons.content_paste,
-                    size: sz,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  onPressed: onSmartPaste,
-                  tooltip: 'Smart Paste (preserves chord formatting)',
-                  padding: EdgeInsets.zero,
-                  style: IconButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
+              iconBtn(
+                icon: Icons.content_paste,
+                onPressed: onSmartPaste!,
+                tooltip: 'Smart Paste (preserves chord formatting)',
               ),
             ],
           ],

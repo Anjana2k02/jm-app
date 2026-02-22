@@ -11,11 +11,13 @@ import 'package:flutter/foundation.dart';
 class ConnectivityService extends ChangeNotifier {
   ConnectivityService() {
     _subscription = Connectivity().onConnectivityChanged.listen(_handleChange);
+    // Check initial state immediately instead of assuming online
+    checkNow();
   }
 
   StreamSubscription<List<ConnectivityResult>>? _subscription;
 
-  bool _online = true;
+  bool _online = false;
 
   /// Whether the device currently has network connectivity.
   bool get isOnline => _online;

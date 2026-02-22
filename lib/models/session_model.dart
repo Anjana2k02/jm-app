@@ -23,11 +23,13 @@ class JamSession {
       userId: map['user_id'] as String,
       name: map['name'] as String,
       sessionDate: map['session_date'] != null
-          ? DateTime.parse(map['session_date'] as String)
+          ? DateTime.tryParse(map['session_date'] as String? ?? '')
           : null,
       notes: (map['notes'] as String?) ?? '',
-      createdAt: DateTime.parse(map['created_at'] as String),
-      updatedAt: DateTime.parse(map['updated_at'] as String),
+      createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ??
+          DateTime.now(),
+      updatedAt: DateTime.tryParse(map['updated_at'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 

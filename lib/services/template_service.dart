@@ -9,40 +9,51 @@ class TemplateService {
   final SupabaseClient _client;
 
   Future<List<Template>> fetchTemplates(String userId) async {
-    final response = await _client
-        .from('templates')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: true);
-
-    return response.map<Template>((row) {
-      return Template.fromMap(row);
-    }).toList();
+    try {
+      final response = await _client
+          .from('templates')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: true);
+      return response.map<Template>((row) => Template.fromMap(row)).toList();
+    } on PostgrestException catch (e) {
+      throw Exception('Failed to load templates: ${e.message}');
+    } catch (e) {
+      throw Exception('Failed to load templates: $e');
+    }
   }
 
   Future<Template> createTemplate({
     required String userId,
     required String name,
   }) async {
-    final response = await _client
-        .from('templates')
-        .insert({'user_id': userId, 'name': name})
-        .select()
-        .single();
-
-    return Template.fromMap(response);
+    try {
+      final response = await _client
+          .from('templates')
+          .insert({'user_id': userId, 'name': name})
+          .select()
+          .single();
+      return Template.fromMap(response);
+    } on PostgrestException catch (e) {
+      throw Exception('Failed to create template: ${e.message}');
+    } catch (e) {
+      throw Exception('Failed to create template: $e');
+    }
   }
 
   Future<List<TemplateItem>> fetchTemplateItems(String templateId) async {
-    final response = await _client
-        .from('template_items')
-        .select()
-        .eq('template_id', templateId)
-        .order('sort_order', ascending: true);
-
-    return response.map<TemplateItem>((row) {
-      return TemplateItem.fromMap(row);
-    }).toList();
+    try {
+      final response = await _client
+          .from('template_items')
+          .select()
+          .eq('template_id', templateId)
+          .order('sort_order', ascending: true);
+      return response.map<TemplateItem>((row) => TemplateItem.fromMap(row)).toList();
+    } on PostgrestException catch (e) {
+      throw Exception('Failed to load template items: ${e.message}');
+    } catch (e) {
+      throw Exception('Failed to load template items: $e');
+    }
   }
 
   Future<void> upsertTemplateOrder({
@@ -50,18 +61,23 @@ class TemplateService {
     required String templateId,
     required List<String> documentIds,
   }) async {
-    final payload = <Map<String, dynamic>>[];
-    for (var i = 0; i < documentIds.length; i++) {
-      payload.add({
-        'user_id': userId,
-        'template_id': templateId,
-        'document_id': documentIds[i],
-        'sort_order': i,
-      });
+    try {
+      final payload = <Map<String, dynamic>>[];
+      for (var i = 0; i < documentIds.length; i++) {
+        payload.add({
+          'user_id': userId,
+          'template_id': templateId,
+          'document_id': documentIds[i],
+          'sort_order': i,
+        });
+      }
+      await _client
+          .from('template_items')
+          .upsert(payload, onConflict: 'template_id,document_id');
+    } on PostgrestException catch (e) {
+      throw Exception('Failed to save template order: ${e.message}');
+    } catch (e) {
+      throw Exception('Failed to save template order: $e');
     }
-
-    await _client
-        .from('template_items')
-        .upsert(payload, onConflict: 'template_id,document_id');
   }
 }
