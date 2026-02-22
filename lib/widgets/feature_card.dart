@@ -18,54 +18,79 @@ class FeatureCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: accentColor.withAlpha(25),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: isDark ? 0.09 : 0.06),
         borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: accentColor.withAlpha(50),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: accentColor, size: 20),
-              ),
-              const Spacer(),
-              Flexible(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+        border: Border.all(
+          color: accentColor.withValues(alpha: isDark ? 0.35 : 0.22),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          splashColor: accentColor.withValues(alpha: 0.10),
+          highlightColor: accentColor.withValues(alpha: 0.07),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: isDark ? 0.20 : 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: accentColor.withValues(
+                        alpha: isDark ? 0.40 : 0.28,
+                      ),
+                    ),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  child: Icon(icon, color: accentColor, size: 20),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Flexible(
-                child: Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                const Spacer(),
+                Flexible(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Flexible(
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

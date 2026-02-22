@@ -31,7 +31,7 @@ class SessionsScreen extends StatelessWidget {
   }
 
   Future<void> _createSession(BuildContext context) async {
-    final result = await showDialog<Map<String, dynamic>>(
+    final result = await showGlassDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => const CreateSessionModal(),
     );
@@ -44,9 +44,7 @@ class SessionsScreen extends StatelessWidget {
       );
 
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Session created')));
+        showGlassSnackBar(context, 'Session created');
       }
     }
   }
@@ -100,33 +98,59 @@ class _SessionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const accent = Color(0xFF7C3AED); // violet
     final dateStr = session.sessionDate != null
         ? formatDate(session.sessionDate!)
         : 'No date set';
 
-    return Card(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                SessionDetailScreen(controller: controller, session: session),
-          ),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: isDark ? 0.09 : 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accent.withValues(alpha: isDark ? 0.35 : 0.22),
+          width: 1.0,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          splashColor: accent.withValues(alpha: 0.10),
+          highlightColor: accent.withValues(alpha: 0.07),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  SessionDetailScreen(controller: controller, session: session),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: isDark ? 0.20 : 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: accent.withValues(alpha: isDark ? 0.40 : 0.25),
+                    ),
+                  ),
+                  child: Icon(Icons.event, color: accent, size: 22),
                 ),
-                child: Icon(Icons.event, color: cs.primary, size: 22),
-              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -157,6 +181,7 @@ class _SessionCard extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

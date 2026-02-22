@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'glass_container.dart';
 
 /// Simplified toolbar for mobile/tablet — guitar chord app focused.
 ///
@@ -115,15 +116,10 @@ class MobileToolbar extends StatelessWidget {
       ),
     );
 
-    return Container(
+    return GlassContainer(
+      enableBlur: false,
+      borderRadius: 0,
       height: 48,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(
-          top: BorderSide(color: cs.outlineVariant, width: 0.5),
-          bottom: BorderSide(color: cs.outlineVariant, width: 0.5),
-        ),
-      ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 6),

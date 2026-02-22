@@ -4,12 +4,21 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 import 'screens/auth_gate.dart';
 import 'screens/config_screen.dart';
+import 'screens/no_connection_screen.dart';
+import 'services/connectivity_service.dart';
 import 'theme/app_theme.dart';
 
 class App extends StatelessWidget {
-  const App({super.key, required this.isConfigured});
+  const App({
+    super.key,
+    required this.isConfigured,
+    required this.supabaseReady,
+    required this.connectivity,
+  });
 
   final bool isConfigured;
+  final bool supabaseReady;
+  final ConnectivityService connectivity;
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +35,11 @@ class App extends StatelessWidget {
         FlutterQuillLocalizations.delegate,
       ],
       supportedLocales: const [Locale('en')],
-      home: isConfigured ? const AuthGate() : const ConfigScreen(),
+      home: !isConfigured
+          ? const ConfigScreen()
+          : !supabaseReady
+          ? NoConnectionScreen(connectivity: connectivity)
+          : AuthGate(connectivity: connectivity),
     );
   }
 }

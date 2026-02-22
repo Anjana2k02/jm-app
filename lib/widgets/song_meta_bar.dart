@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/document_model.dart';
+import 'glass_container.dart';
 
 /// Compact bar for editing a song's Key, BPM and Duration.
 ///
@@ -95,15 +96,11 @@ class _SongMetaBarState extends State<SongMetaBar> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Container(
+    return GlassContainer(
+      enableBlur: false,
+      borderRadius: 0,
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.4)),
-        ),
-      ),
       child: Row(
         children: [
           // Key

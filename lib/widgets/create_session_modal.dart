@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'glass_container.dart';
+import 'glass_dialog.dart';
 
 /// Modal for creating a new session.
 ///
@@ -25,9 +27,7 @@ class _CreateSessionModalState extends State<CreateSessionModal> {
   void _submit() {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a session name')),
-      );
+      showGlassSnackBar(context, 'Please enter a session name');
       return;
     }
 
@@ -53,9 +53,12 @@ class _CreateSessionModalState extends State<CreateSessionModal> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: GlassContainer(
+        borderRadius: 20,
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

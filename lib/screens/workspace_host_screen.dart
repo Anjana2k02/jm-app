@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../controllers/workspace_controller.dart';
 import '../models/document_model.dart';
+import '../services/connectivity_service.dart';
 import '../widgets/document_list_tile.dart';
 import '../widgets/empty_state.dart';
 import 'home_screen.dart';
@@ -18,7 +19,9 @@ const double kTabletBreakpoint = 1024.0;
 /// Holds the shared [WorkspaceController] and selects the appropriate
 /// layout based on current screen width.
 class WorkspaceHostScreen extends StatefulWidget {
-  const WorkspaceHostScreen({super.key});
+  const WorkspaceHostScreen({super.key, required this.connectivity});
+
+  final ConnectivityService connectivity;
 
   @override
   State<WorkspaceHostScreen> createState() => _WorkspaceHostScreenState();
@@ -26,17 +29,68 @@ class WorkspaceHostScreen extends StatefulWidget {
 
 class _WorkspaceHostScreenState extends State<WorkspaceHostScreen> {
   late final WorkspaceController _controller;
+  bool _wasOnline = true;
 
   @override
   void initState() {
     super.initState();
     _controller = WorkspaceController();
+    _wasOnline = widget.connectivity.isOnline;
+    widget.connectivity.addListener(_onConnectivityChanged);
   }
 
   @override
   void dispose() {
+    widget.connectivity.removeListener(_onConnectivityChanged);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onConnectivityChanged() {
+    final isOnline = widget.connectivity.isOnline;
+
+    if (!isOnline && _wasOnline) {
+      // Just went offline — show snackbar.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text('Connection lost !'),
+              ],
+            ),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } else if (isOnline && !_wasOnline) {
+      // Just came back online — dismiss any lingering snackbar and show recovery.
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.wifi_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Text('Back online'),
+              ],
+            ),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        // Reload data now that we're back.
+        _controller.loadAll();
+      }
+    }
+
+    _wasOnline = isOnline;
   }
 
   @override
@@ -175,10 +229,10 @@ class _MobileLayoutState extends State<_MobileLayout> {
                   labelText: 'Song title',
                   hintText: 'Untitled',
                 ),
-                onSubmitted: (_) => Navigator.pop(
-                  ctx,
-                  (title: titleCtrl.text, type: selectedType),
-                ),
+                onSubmitted: (_) => Navigator.pop(ctx, (
+                  title: titleCtrl.text,
+                  type: selectedType,
+                )),
               ),
               const SizedBox(height: 12),
               const Text(
@@ -216,10 +270,10 @@ class _MobileLayoutState extends State<_MobileLayout> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(
-                ctx,
-                (title: titleCtrl.text, type: selectedType),
-              ),
+              onPressed: () => Navigator.pop(ctx, (
+                title: titleCtrl.text,
+                type: selectedType,
+              )),
               child: const Text('Create'),
             ),
           ],

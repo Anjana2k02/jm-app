@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/auth_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/branded_logo.dart';
 import '../widgets/error_banner.dart';
+import '../widgets/glass_container.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -67,10 +69,10 @@ class _AuthScreenState extends State<AuthScreen> {
     final cs = Theme.of(context).colorScheme;
     final isWide = MediaQuery.sizeOf(context).width >= 600;
 
-    Widget form = Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+    Widget form = GlassContainer(
+      borderRadius: 20,
+      padding: const EdgeInsets.all(24),
+      child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -190,13 +192,24 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ],
         ),
-      ),
     );
 
+    final isDark = cs.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: cs.surface,
-      body: SafeArea(
-        child: Center(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [kSurfaceDark, kSidebarDark, const Color(0xFF1A1A2E)]
+                : [kSurfaceLight, kSidebarLight, const Color(0xFFEDE9FE)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
           child: SingleChildScrollView(
             padding: EdgeInsets.symmetric(
               horizontal: isWide ? 0 : 20,
@@ -216,6 +229,7 @@ class _AuthScreenState extends State<AuthScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

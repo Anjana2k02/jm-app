@@ -539,58 +539,85 @@ class _SessionListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const accent = Color(0xFF7C3AED); // violet
     final dateStr = session.sessionDate != null
         ? formatDate(session.sessionDate as DateTime)
         : 'No date';
 
-    return Card(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       margin: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => SessionDetailScreen(
-              controller: controller,
-              session: session,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: isDark ? 0.09 : 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accent.withValues(alpha: isDark ? 0.35 : 0.22),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          splashColor: accent.withValues(alpha: 0.10),
+          highlightColor: accent.withValues(alpha: 0.07),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => SessionDetailScreen(
+                controller: controller,
+                session: session,
+              ),
             ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.event, color: cs.primary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      session.name as String,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: isDark ? 0.20 : 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: accent.withValues(alpha: isDark ? 0.40 : 0.25),
                     ),
-                    Text(
-                      dateStr,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
+                  ),
+                  child: Icon(Icons.event, color: accent, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.name as String,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                      Text(
+                        dateStr,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-            ],
+                Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+              ],
+            ),
           ),
         ),
       ),

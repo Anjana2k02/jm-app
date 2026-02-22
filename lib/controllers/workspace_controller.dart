@@ -104,9 +104,9 @@ class WorkspaceController extends ChangeNotifier {
       // Fetch all three collections in parallel.
       // Each has its own error handler so a single failing table
       // (e.g. sessions not yet created in Supabase) doesn't block the rest.
-      final docsFuture = _documentService
-          .fetchDocuments(user.id)
-          .catchError((Object e) {
+      final docsFuture = _documentService.fetchDocuments(user.id).catchError((
+        Object e,
+      ) {
         loadError = 'Could not load documents: $e';
         return <AppDocument>[];
       });
@@ -114,21 +114,22 @@ class WorkspaceController extends ChangeNotifier {
       final templatesFuture = _templateService
           .fetchTemplates(user.id)
           .catchError((Object e) {
-        loadError ??= 'Could not load templates: $e';
-        return <Template>[];
-      });
+            loadError ??= 'Could not load templates: $e';
+            return <Template>[];
+          });
 
-      final sessionsFuture = _sessionService
-          .fetchSessions(user.id)
-          .catchError((Object e) {
+      final sessionsFuture = _sessionService.fetchSessions(user.id).catchError((
+        Object e,
+      ) {
         loadError ??= 'Could not load sessions: $e';
         return <JamSession>[];
       });
 
-      final results = await Future.wait(
-        [docsFuture, templatesFuture, sessionsFuture],
-        eagerError: false,
-      );
+      final results = await Future.wait([
+        docsFuture,
+        templatesFuture,
+        sessionsFuture,
+      ], eagerError: false);
 
       documents = results[0] as List<AppDocument>;
       templates = results[1] as List<Template>;
@@ -293,7 +294,10 @@ class WorkspaceController extends ChangeNotifier {
     if (document == null || newTitle.trim().isEmpty) return;
 
     final trimmed = newTitle.trim();
-    final updated = document.copyWith(title: trimmed, updatedAt: DateTime.now());
+    final updated = document.copyWith(
+      title: trimmed,
+      updatedAt: DateTime.now(),
+    );
 
     await _documentService.updateDocument(
       documentId: document.id,
@@ -302,7 +306,9 @@ class WorkspaceController extends ChangeNotifier {
     );
 
     selectedDocument = updated;
-    documents = documents.map((d) => d.id == document.id ? updated : d).toList();
+    documents = documents
+        .map((d) => d.id == document.id ? updated : d)
+        .toList();
     notifyListeners();
   }
 
@@ -339,10 +345,7 @@ class WorkspaceController extends ChangeNotifier {
     final doc = selectedDocument;
     if (doc == null) return;
 
-    await _documentService.updateSongMeta(
-      documentId: doc.id,
-      fields: fields,
-    );
+    await _documentService.updateSongMeta(documentId: doc.id, fields: fields);
 
     final updated = doc.copyWith(
       songKey: fields.containsKey('song_key')
@@ -352,9 +355,11 @@ class WorkspaceController extends ChangeNotifier {
       durationSeconds: fields.containsKey('duration_seconds')
           ? (fields['duration_seconds'] as int?)
           : doc.durationSeconds,
-      clearSongKey: fields['song_key'] == null && fields.containsKey('song_key'),
+      clearSongKey:
+          fields['song_key'] == null && fields.containsKey('song_key'),
       clearBpm: fields['bpm'] == null && fields.containsKey('bpm'),
-      clearDuration: fields['duration_seconds'] == null &&
+      clearDuration:
+          fields['duration_seconds'] == null &&
           fields.containsKey('duration_seconds'),
     );
 
@@ -391,8 +396,9 @@ class WorkspaceController extends ChangeNotifier {
       documentIds: ids,
     );
 
-    final refreshed =
-        await _templateService.fetchTemplateItems(activeTemplate!.id);
+    final refreshed = await _templateService.fetchTemplateItems(
+      activeTemplate!.id,
+    );
     templateItems = refreshed;
     notifyListeners();
   }
@@ -427,11 +433,7 @@ class WorkspaceController extends ChangeNotifier {
 
   // ─── Sessions ─────────────────────────────────────────────────────────────
 
-  Future<void> createSession(
-    String name,
-    DateTime? date,
-    String notes,
-  ) async {
+  Future<void> createSession(String name, DateTime? date, String notes) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
 
@@ -484,8 +486,9 @@ class WorkspaceController extends ChangeNotifier {
     final today = DateTime.now();
     final todayDate = DateTime(today.year, today.month, today.day);
     return sessions
-        .where((s) =>
-            s.sessionDate != null && !s.sessionDate!.isBefore(todayDate))
+        .where(
+          (s) => s.sessionDate != null && !s.sessionDate!.isBefore(todayDate),
+        )
         .toList();
   }
 
@@ -499,36 +502,42 @@ class WorkspaceController extends ChangeNotifier {
 
     for (final doc in documents) {
       if (doc.title.toLowerCase().contains(q)) {
-        results.add(SearchResult(
-          type: SearchResultType.document,
-          id: doc.id,
-          title: doc.title.isEmpty ? 'Untitled' : doc.title,
-          subtitle: 'Document',
-        ));
+        results.add(
+          SearchResult(
+            type: SearchResultType.document,
+            id: doc.id,
+            title: doc.title.isEmpty ? 'Untitled' : doc.title,
+            subtitle: 'Document',
+          ),
+        );
       }
     }
 
     for (final session in sessions) {
       if (session.name.toLowerCase().contains(q)) {
-        results.add(SearchResult(
-          type: SearchResultType.session,
-          id: session.id,
-          title: session.name,
-          subtitle: session.sessionDate != null
-              ? 'Session · ${_formatDate(session.sessionDate!)}'
-              : 'Session',
-        ));
+        results.add(
+          SearchResult(
+            type: SearchResultType.session,
+            id: session.id,
+            title: session.name,
+            subtitle: session.sessionDate != null
+                ? 'Session · ${_formatDate(session.sessionDate!)}'
+                : 'Session',
+          ),
+        );
       }
     }
 
     for (final template in templates) {
       if (template.name.toLowerCase().contains(q)) {
-        results.add(SearchResult(
-          type: SearchResultType.template,
-          id: template.id,
-          title: template.name,
-          subtitle: 'Template',
-        ));
+        results.add(
+          SearchResult(
+            type: SearchResultType.template,
+            id: template.id,
+            title: template.name,
+            subtitle: 'Template',
+          ),
+        );
       }
     }
 
@@ -537,8 +546,18 @@ class WorkspaceController extends ChangeNotifier {
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
