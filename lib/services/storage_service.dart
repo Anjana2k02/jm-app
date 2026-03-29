@@ -12,21 +12,27 @@ class StorageService {
     required String userId,
     required XFile file,
   }) async {
-    final bytes = await file.readAsBytes();
-    final extension = _fileExtension(file.name);
-    final path = '$userId/${_uuid.v4()}.$extension';
+    try {
+      final bytes = await file.readAsBytes();
+      final extension = _fileExtension(file.name);
+      final path = '$userId/${_uuid.v4()}.$extension';
 
-    await _client.storage
-        .from('doc-images')
-        .uploadBinary(
-          path,
-          bytes,
-          fileOptions: FileOptions(
-            contentType: file.mimeType ?? 'application/octet-stream',
-          ),
-        );
+      await _client.storage
+          .from('doc-images')
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: file.mimeType ?? 'application/octet-stream',
+            ),
+          );
 
-    return _client.storage.from('doc-images').getPublicUrl(path);
+      return _client.storage.from('doc-images').getPublicUrl(path);
+    } on StorageException catch (e) {
+      throw Exception('Image upload failed: ${e.message}');
+    } catch (e) {
+      throw Exception('Image upload failed: $e');
+    }
   }
 
   String _fileExtension(String name) {

@@ -9,11 +9,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:jammer_app/app.dart';
+import 'package:jammer_app/services/connectivity_service.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+    final connectivity = ConnectivityService();
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const App(isConfigured: false));
+    await tester.pumpWidget(
+      App(
+        isConfigured: false,
+        supabaseReady: false,
+        connectivity: connectivity,
+      ),
+    );
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);

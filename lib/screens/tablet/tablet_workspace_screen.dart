@@ -3,11 +3,14 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../controllers/workspace_controller.dart';
+import '../../models/document_model.dart'; // AppDocument, SongType
 import '../../models/template_model.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/document_list_tile.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/glass_dialog.dart';
 import '../../widgets/save_status_chip.dart';
+import '../../widgets/song_meta_bar.dart';
 import '../home_screen.dart';
 import '../sessions/sessions_screen.dart';
 
@@ -24,6 +27,7 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
   final _imagePicker = ImagePicker();
+  bool _uploadingImage = false;
 
   // Rail destinations: 0=Home, 1=Documents, 2=Sessions, 3=Settings
   int _selectedNavIndex = 0;
@@ -31,13 +35,28 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
   WorkspaceController get _ws => widget.controller;
 
   @override
+  void initState() {
+    super.initState();
+    _ws.addListener(_onControllerChange);
+  }
+
+  @override
   void dispose() {
+    _ws.removeListener(_onControllerChange);
     _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
+  void _onControllerChange() {
+    final err = _ws.operationError;
+    if (err != null && mounted) {
+      showGlassSnackBar(context, err);
+    }
+  }
+
   Future<void> _insertImage() async {
+    if (_uploadingImage) return;
     final controller = _ws.quillController;
     final user = _ws.client.auth.currentUser;
     if (controller == null || user == null) return;
@@ -45,50 +64,102 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
     final file = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
 
-    final url = await _ws.storageService.uploadImage(
-      userId: user.id,
-      file: file,
-    );
-    final index = controller.selection.baseOffset;
-    controller.replaceText(
-      index,
-      0,
-      BlockEmbed.image(url),
-      TextSelection.collapsed(offset: index + 1),
-    );
-    if (mounted) setState(() {});
+    setState(() => _uploadingImage = true);
+    try {
+      final url = await _ws.storageService.uploadImage(
+        userId: user.id,
+        file: file,
+      );
+      final index = controller.selection.baseOffset;
+      controller.replaceText(
+        index,
+        0,
+        BlockEmbed.image(url),
+        TextSelection.collapsed(offset: index + 1),
+      );
+    } catch (e) {
+      if (mounted) showGlassSnackBar(context, 'Image upload failed. Try again.');
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
   }
 
   Future<void> _showCreateDocDialog() async {
-    final titleController = TextEditingController();
-    final title = await showDialog<String>(
+    final titleCtrl = TextEditingController();
+    SongType selectedType = SongType.song;
+
+    final result = await showDialog<({String title, SongType type})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New document'),
-        content: TextField(
-          controller: titleController,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Title',
-            hintText: 'Untitled',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('New song'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Song title',
+                  hintText: 'Untitled',
+                ),
+                onSubmitted: (_) => Navigator.pop(
+                  ctx,
+                  (title: titleCtrl.text, type: selectedType),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Type',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              RadioGroup<SongType>(
+                groupValue: selectedType,
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => selectedType = v);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<SongType>(
+                      title: const Text('Song'),
+                      value: SongType.song,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    RadioListTile<SongType>(
+                      title: const Text('Medley'),
+                      value: SongType.medley,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                ctx,
+                (title: titleCtrl.text, type: selectedType),
+              ),
+              child: const Text('Create'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, titleController.text),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
-    if (title == null || title.trim().isEmpty) return;
-    if (mounted) await _ws.createDocument(title);
+    if (result == null || result.title.trim().isEmpty) return;
+    if (!mounted) return;
+    final ok = await _ws.createDocument(result.title, result.type);
+    if (ok && mounted) showGlassSnackBar(context, 'Song created');
   }
 
   Future<void> _showCreateTemplateDialog() async {
@@ -197,7 +268,8 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
     );
 
     if (result != true || nameCtrl.text.trim().isEmpty) return;
-    await _ws.createSession(nameCtrl.text.trim(), selectedDate, notesCtrl.text);
+    final ok = await _ws.createSession(nameCtrl.text.trim(), selectedDate, notesCtrl.text);
+    if (ok && mounted) showGlassSnackBar(context, 'Session created');
   }
 
   String _formatDate(DateTime date) {
@@ -287,16 +359,17 @@ class _TabletWorkspaceScreenState extends State<TabletWorkspaceScreen> {
             Expanded(
               child: _ws.selectedDocument == null || _ws.quillController == null
                   ? EmptyState(
-                      icon: Icons.edit_document,
-                      title: 'No document selected',
-                      subtitle: 'Select or create a document.',
+                      icon: Icons.music_note_outlined,
+                      title: 'No song selected',
+                      subtitle: 'Select or create a song.',
                       action: FilledButton.icon(
                         onPressed: _showCreateDocDialog,
                         icon: const Icon(Icons.add),
-                        label: const Text('New document'),
+                        label: const Text('New song'),
                       ),
                     )
                   : _EditorPane(
+                      key: ValueKey(_ws.selectedDocument?.id),
                       controller: _ws,
                       scrollController: _scrollController,
                       focusNode: _focusNode,
@@ -353,9 +426,9 @@ class _TabletRail extends StatelessWidget {
           label: Text('Home'),
         ),
         NavigationRailDestination(
-          icon: Icon(Icons.description_outlined),
-          selectedIcon: Icon(Icons.description),
-          label: Text('Documents'),
+          icon: Icon(Icons.music_note_outlined),
+          selectedIcon: Icon(Icons.music_note),
+          label: Text('Songs'),
         ),
         NavigationRailDestination(
           icon: Icon(Icons.event_outlined),
@@ -431,7 +504,7 @@ class _DocumentListPane extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  'DOCUMENTS',
+                  'SONGS',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
@@ -443,7 +516,7 @@ class _DocumentListPane extends StatelessWidget {
                 IconButton(
                   onPressed: onCreateDoc,
                   icon: const Icon(Icons.add, size: 18),
-                  tooltip: 'New document',
+                  tooltip: 'New song',
                   style: IconButton.styleFrom(minimumSize: const Size(34, 34)),
                 ),
               ],
@@ -455,7 +528,7 @@ class _DocumentListPane extends StatelessWidget {
             child: docs.isEmpty
                 ? Center(
                     child: Text(
-                      'No documents yet',
+                      'No songs yet',
                       style: TextStyle(
                         fontSize: 13,
                         color: cs.onSurfaceVariant,
@@ -508,8 +581,9 @@ class _DocumentListPane extends StatelessWidget {
 
 // ─── Editor Pane ──────────────────────────────────────────────────────────────
 
-class _EditorPane extends StatelessWidget {
+class _EditorPane extends StatefulWidget {
   const _EditorPane({
+    super.key,
     required this.controller,
     required this.scrollController,
     required this.focusNode,
@@ -522,9 +596,40 @@ class _EditorPane extends StatelessWidget {
   final VoidCallback onInsertImage;
 
   @override
+  State<_EditorPane> createState() => _EditorPaneState();
+}
+
+class _EditorPaneState extends State<_EditorPane> {
+  late final TextEditingController _titleCtrl;
+
+  WorkspaceController get _ctrl => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final doc = _ctrl.selectedDocument!;
+    _titleCtrl = TextEditingController(
+      text: doc.title.isEmpty ? '' : doc.title,
+    );
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submitTitle() {
+    final text = _titleCtrl.text.trim();
+    if (text.isNotEmpty && text != _ctrl.selectedDocument?.title) {
+      _ctrl.renameDocument(text);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final doc = controller.selectedDocument!;
+    final AppDocument doc = _ctrl.selectedDocument!;
 
     return Column(
       children: [
@@ -539,26 +644,32 @@ class _EditorPane extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text(
-                  doc.title.isEmpty ? 'Untitled' : doc.title,
+                child: TextField(
+                  controller: _titleCtrl,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    hintText: 'Untitled',
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onSubmitted: (_) => _submitTitle(),
+                  onEditingComplete: _submitTitle,
                 ),
               ),
-              SaveStatusChip(saving: controller.saving),
+              SaveStatusChip(saving: _ctrl.saving),
               const SizedBox(width: 8),
               IconButton(
-                onPressed: onInsertImage,
+                onPressed: widget.onInsertImage,
                 icon: const Icon(Icons.image_outlined, size: 20),
                 tooltip: 'Insert image',
                 style: IconButton.styleFrom(minimumSize: const Size(36, 36)),
               ),
               IconButton(
-                onPressed: controller.saving ? null : controller.saveDocument,
+                onPressed: _ctrl.saving ? null : _ctrl.saveDocument,
                 icon: const Icon(Icons.save_outlined, size: 20),
                 tooltip: 'Save',
                 style: IconButton.styleFrom(minimumSize: const Size(36, 36)),
@@ -567,13 +678,19 @@ class _EditorPane extends StatelessWidget {
           ),
         ),
 
+        // Song metadata bar (Key / BPM / Duration)
+        SongMetaBar(
+          document: doc,
+          onSave: _ctrl.updateSongMeta,
+        ),
+
         // Toolbar
         Container(
           color: cs.surfaceContainerLow,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: QuillSimpleToolbar(
-              controller: controller.quillController!,
+              controller: _ctrl.quillController!,
               config: const QuillSimpleToolbarConfig(
                 showBoldButton: true,
                 showItalicButton: true,
@@ -613,9 +730,9 @@ class _EditorPane extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: QuillEditor(
-              controller: controller.quillController!,
-              scrollController: scrollController,
-              focusNode: focusNode,
+              controller: _ctrl.quillController!,
+              scrollController: widget.scrollController,
+              focusNode: widget.focusNode,
               config: const QuillEditorConfig(
                 autoFocus: false,
                 expands: true,

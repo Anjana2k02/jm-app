@@ -4,13 +4,16 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../controllers/workspace_controller.dart';
-import '../models/template_model.dart';
+import '../models/document_model.dart';
 import '../utils/chord_detector.dart';
 import '../utils/clipboard_to_delta_converter.dart';
+import '../utils/haptics.dart';
 import '../theme/app_colors.dart';
 import '../widgets/document_list_tile.dart';
+import '../widgets/dismissible_container.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/save_status_chip.dart';
+import '../widgets/glass_dialog.dart';
+import '../widgets/song_meta_bar.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'sessions/sessions_screen.dart';
@@ -30,15 +33,42 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
   final _imagePicker = ImagePicker();
+  final _titleCtrl = TextEditingController();
+  String? _currentDocId;
 
   _DesktopView _view = _DesktopView.home;
+  bool _uploadingImage = false;
 
   WorkspaceController get _ws => widget.controller;
 
   @override
+  void initState() {
+    super.initState();
+    _ws.addListener(_onControllerChange);
+  }
+
+  void _onControllerChange() {
+    final err = _ws.operationError;
+    if (err != null && mounted) {
+      showGlassSnackBar(context, err);
+    }
+  }
+
+  /// Keeps _titleCtrl in sync when the selected document changes.
+  void _syncTitleCtrl() {
+    final doc = _ws.selectedDocument;
+    if (doc?.id != _currentDocId) {
+      _currentDocId = doc?.id;
+      _titleCtrl.text = doc?.title ?? '';
+    }
+  }
+
+  @override
   void dispose() {
+    _ws.removeListener(_onControllerChange);
     _scrollController.dispose();
     _focusNode.dispose();
+    _titleCtrl.dispose();
     super.dispose();
   }
 
@@ -60,6 +90,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   }
 
   Future<void> _insertImage() async {
+    if (_uploadingImage) return;
     final controller = _ws.quillController;
     final user = _ws.client.auth.currentUser;
     if (controller == null || user == null) return;
@@ -67,57 +98,112 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final file = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
 
-    final url = await _ws.storageService.uploadImage(
-      userId: user.id,
-      file: file,
-    );
-    final index = controller.selection.baseOffset;
-    controller.replaceText(
-      index,
-      0,
-      BlockEmbed.image(url),
-      TextSelection.collapsed(offset: index + 1),
-    );
-    if (mounted) setState(() {});
+    setState(() => _uploadingImage = true);
+    try {
+      final url = await _ws.storageService.uploadImage(
+        userId: user.id,
+        file: file,
+      );
+      final index = controller.selection.baseOffset;
+      controller.replaceText(
+        index,
+        0,
+        BlockEmbed.image(url),
+        TextSelection.collapsed(offset: index + 1),
+      );
+    } catch (e) {
+      if (mounted)
+        showGlassSnackBar(context, 'Image upload failed. Try again.');
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
   }
 
   Future<void> _showCreateDocDialog() async {
-    final titleController = TextEditingController();
-    final title = await showDialog<String>(
+    final titleCtrl = TextEditingController();
+    SongType selectedType = SongType.song;
+
+    final result = await showGlassDialog<({String title, SongType type})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New document'),
-        content: TextField(
-          controller: titleController,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Title',
-            hintText: 'Untitled',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: Colors.transparent,
+          title: const Text('New song'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Song title',
+                  hintText: 'Untitled',
+                ),
+                onSubmitted: (_) => Navigator.pop(ctx, (
+                  title: titleCtrl.text,
+                  type: selectedType,
+                )),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Type',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              RadioGroup<SongType>(
+                groupValue: selectedType,
+                onChanged: (v) {
+                  if (v != null) setDialogState(() => selectedType = v);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<SongType>(
+                      title: const Text('Song'),
+                      value: SongType.song,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                    RadioListTile<SongType>(
+                      title: const Text('Medley'),
+                      value: SongType.medley,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, (
+                title: titleCtrl.text,
+                type: selectedType,
+              )),
+              child: const Text('Create'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, titleController.text),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
-    if (title == null || title.trim().isEmpty) return;
-    if (mounted) await _ws.createDocument(title);
+    if (result == null || result.title.trim().isEmpty) return;
+    if (!mounted) return;
+    final ok = await _ws.createDocument(result.title, result.type);
+    if (ok && mounted) showGlassSnackBar(context, 'Song created');
   }
 
   Future<void> _showCreateTemplateDialog() async {
     final nameController = TextEditingController();
-    final name = await showDialog<String>(
+    final name = await showGlassDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.transparent,
         title: const Text('New template'),
         content: TextField(
           controller: nameController,
@@ -146,10 +232,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     DateTime? selectedDate;
     final notesCtrl = TextEditingController();
 
-    final result = await showDialog<bool>(
+    final result = await showGlassDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: Colors.transparent,
           title: const Text('New session'),
           content: SingleChildScrollView(
             child: Column(
@@ -219,7 +306,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     );
 
     if (result != true || nameCtrl.text.trim().isEmpty) return;
-    await _ws.createSession(nameCtrl.text.trim(), selectedDate, notesCtrl.text);
+    final ok = await _ws.createSession(
+      nameCtrl.text.trim(),
+      selectedDate,
+      notesCtrl.text,
+    );
+    if (ok && mounted) showGlassSnackBar(context, 'Session created');
   }
 
   String _formatDate(DateTime date) {
@@ -238,6 +330,43 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  Future<void> _confirmDeleteDocument(AppDocument doc) async {
+    final confirmed = await showGlassDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.transparent,
+        title: const Text('Delete song?'),
+        content: Text(
+          'Permanently delete "${doc.title.isEmpty ? 'Untitled' : doc.title}"? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              HapticsManager.lightTap();
+              Navigator.pop(ctx, false);
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () {
+              HapticsManager.heavyTap();
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await HapticsManager.dismissFeedback();
+    final title = doc.title.isEmpty ? 'Untitled' : doc.title;
+    final ok = await _ws.deleteDocument(doc.id);
+    if (ok && mounted) showGlassSnackBar(context, 'Deleted "$title"');
   }
 
   void _openSearch() {
@@ -270,8 +399,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 currentView: _view,
                 onViewChanged: (v) => setState(() => _view = v),
                 onCreateDoc: _showCreateDocDialog,
-                onCreateTemplate: _showCreateTemplateDialog,
-                onSearch: _openSearch,
+                onDeleteDoc: _confirmDeleteDocument,
               ),
               Expanded(child: _buildMainContent()),
             ],
@@ -303,24 +431,25 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   Widget _buildEmptyEditor() {
     return EmptyState(
-      icon: Icons.edit_document,
-      title: 'No document selected',
-      subtitle: 'Create or select a document from the sidebar.',
+      icon: Icons.music_note_outlined,
+      title: 'No song selected',
+      subtitle: 'Create or select a song from the sidebar.',
       action: FilledButton.icon(
         onPressed: _showCreateDocDialog,
         icon: const Icon(Icons.add),
-        label: const Text('New document'),
+        label: const Text('New song'),
       ),
     );
   }
 
   Widget _buildEditor() {
+    _syncTitleCtrl();
     final cs = Theme.of(context).colorScheme;
     final doc = _ws.selectedDocument!;
 
     return Column(
       children: [
-        // Top bar: breadcrumb + actions
+        // Top bar: breadcrumb + editable title + actions
         Container(
           height: 52,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -330,29 +459,43 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           ),
           child: Row(
             children: [
-              Icon(Icons.edit_document, size: 16, color: cs.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Text(
-                'Jammer Docs',
-                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-              ),
-              Icon(Icons.chevron_right, size: 16, color: cs.onSurfaceVariant),
-              Expanded(
-                child: Text(
-                  doc.title.isEmpty ? 'Untitled' : doc.title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+              // Editable song title
+              IntrinsicWidth(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 80,
+                    maxWidth: 240,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  child: TextField(
+                    controller: _titleCtrl,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: 'Untitled',
+                    ),
+                    onSubmitted: (v) => _ws.renameDocument(v.trim()),
+                    onEditingComplete: () =>
+                        _ws.renameDocument(_titleCtrl.text.trim()),
+                  ),
                 ),
               ),
-              SaveStatusChip(saving: _ws.saving),
-              const SizedBox(width: 8),
+              const Spacer(),
               FilledButton.tonalIcon(
-                onPressed: _insertImage,
-                icon: const Icon(Icons.image_outlined, size: 16),
+                onPressed: _uploadingImage ? null : _insertImage,
+                icon: _uploadingImage
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.image_outlined, size: 16),
                 label: const Text('Image'),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(0, 36),
@@ -372,14 +515,19 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton(
+              TextButton(
                 onPressed: _ws.saving ? null : _ws.saveDocument,
-                icon: const Icon(Icons.save_outlined, size: 20),
-                tooltip: 'Save',
-                style: IconButton.styleFrom(minimumSize: const Size(36, 36)),
+                child: const Text('Save'),
               ),
             ],
           ),
+        ),
+
+        // Song metadata bar: Key · BPM · Duration
+        SongMetaBar(
+          key: ValueKey(doc.id),
+          document: doc,
+          onSave: _ws.updateSongMeta,
         ),
 
         // Quill toolbar — horizontal scroll so it never overflows
@@ -460,16 +608,14 @@ class _DesktopSidebar extends StatelessWidget {
     required this.currentView,
     required this.onViewChanged,
     required this.onCreateDoc,
-    required this.onCreateTemplate,
-    required this.onSearch,
+    required this.onDeleteDoc,
   });
 
   final WorkspaceController controller;
   final _DesktopView currentView;
   final ValueChanged<_DesktopView> onViewChanged;
   final VoidCallback onCreateDoc;
-  final VoidCallback onCreateTemplate;
-  final VoidCallback onSearch;
+  final Future<void> Function(AppDocument) onDeleteDoc;
 
   @override
   Widget build(BuildContext context) {
@@ -545,52 +691,45 @@ class _DesktopSidebar extends StatelessWidget {
 
           Divider(height: 1, color: borderColor),
 
-          // View switcher
-          _SectionLabel(label: 'NAVIGATE'),
-          _ViewSwitcher(
-            currentView: currentView,
-            onViewChanged: onViewChanged,
-            onSearch: onSearch,
+          // ── Compact nav: Home + Sessions ────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+            child: Column(
+              children: [
+                _navItem(
+                  icon: Icons.home_outlined,
+                  label: 'Home',
+                  view: _DesktopView.home,
+                  currentView: currentView,
+                  onViewChanged: onViewChanged,
+                  cs: cs,
+                  isDark: isDark,
+                ),
+                const SizedBox(height: 2),
+                _navItem(
+                  icon: Icons.event_outlined,
+                  label: 'Sessions',
+                  view: _DesktopView.sessions,
+                  currentView: currentView,
+                  onViewChanged: onViewChanged,
+                  cs: cs,
+                  isDark: isDark,
+                ),
+              ],
+            ),
           ),
 
-          Divider(height: 1, color: borderColor),
-
-          // Only show doc list pane when in Documents view
-          if (currentView == _DesktopView.documents) ...[
-            // Template selector section
-            _SectionLabel(label: 'VIEW'),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 8, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _TemplateDropdown(
-                      templates: controller.templates,
-                      activeTemplate: controller.activeTemplate,
-                      onChanged: controller.switchTemplate,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: onCreateTemplate,
-                    icon: const Icon(Icons.layers_outlined, size: 18),
-                    tooltip: 'New template',
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(34, 34),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
+          // Only show songs section when not on home view
+          if (currentView != _DesktopView.home) ...[
             Divider(height: 1, color: borderColor),
 
-            // Documents section header
+            // ── Songs header ─────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
               child: Row(
                 children: [
                   Text(
-                    'DOCUMENTS',
+                    'SONGS',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -600,9 +739,12 @@ class _DesktopSidebar extends StatelessWidget {
                   ),
                   const Spacer(),
                   IconButton(
-                    onPressed: onCreateDoc,
+                    onPressed: () {
+                      onViewChanged(_DesktopView.documents);
+                      onCreateDoc();
+                    },
                     icon: const Icon(Icons.add, size: 18),
-                    tooltip: 'New document',
+                    tooltip: 'New song',
                     style: IconButton.styleFrom(
                       minimumSize: const Size(34, 34),
                     ),
@@ -611,12 +753,12 @@ class _DesktopSidebar extends StatelessWidget {
               ),
             ),
 
-            // Document list
+            // ── Song list ────────────────────────────────────────────────────
             Expanded(
               child: docs.isEmpty
                   ? Center(
                       child: Text(
-                        'No documents yet',
+                        'No songs yet',
                         style: TextStyle(
                           fontSize: 13,
                           color: cs.onSurfaceVariant,
@@ -632,10 +774,25 @@ class _DesktopSidebar extends StatelessWidget {
                       itemCount: docs.length,
                       itemBuilder: (ctx, i) {
                         final doc = docs[i];
-                        return DocumentListTile(
-                          document: doc,
-                          isSelected: controller.selectedDocument?.id == doc.id,
-                          onTap: () => controller.selectDocument(doc),
+                        return Dismissible(
+                          key: ValueKey(doc.id),
+                          direction: DismissDirection.endToStart,
+                          confirmDismiss: (_) =>
+                              onDeleteDoc(doc).then((_) => false),
+                          background: buildDismissibleBackground(
+                            ctx,
+                            label: 'Delete',
+                            icon: Icons.delete_outline,
+                          ),
+                          child: DocumentListTile(
+                            document: doc,
+                            isSelected:
+                                controller.selectedDocument?.id == doc.id,
+                            onTap: () {
+                              controller.selectDocument(doc);
+                              onViewChanged(_DesktopView.documents);
+                            },
+                          ),
                         );
                       },
                     )
@@ -647,177 +804,79 @@ class _DesktopSidebar extends StatelessWidget {
                       onReorder: controller.reorderDocuments,
                       children: [
                         for (final doc in docs)
-                          DocumentListTile(
+                          Dismissible(
                             key: ValueKey(doc.id),
-                            document: doc,
-                            isSelected:
-                                controller.selectedDocument?.id == doc.id,
-                            onTap: () => controller.selectDocument(doc),
-                            trailing: Icon(
-                              Icons.drag_handle,
-                              size: 18,
-                              color: cs.onSurfaceVariant,
+                            direction: DismissDirection.endToStart,
+                            confirmDismiss: (_) =>
+                                onDeleteDoc(doc).then((_) => false),
+                            background: buildDismissibleBackground(
+                              context,
+                              label: 'Delete',
+                              icon: Icons.delete_outline,
+                            ),
+                            child: DocumentListTile(
+                              key: ValueKey('tile_${doc.id}'),
+                              document: doc,
+                              isSelected:
+                                  controller.selectedDocument?.id == doc.id,
+                              onTap: () {
+                                controller.selectDocument(doc);
+                                onViewChanged(_DesktopView.documents);
+                              },
+                              trailing: Icon(
+                                Icons.drag_handle,
+                                size: 18,
+                                color: cs.onSurfaceVariant,
+                              ),
                             ),
                           ),
                       ],
                     ),
             ),
-          ] else
-            // Spacer for non-documents views
-            const Spacer(),
+          ],
         ],
       ),
     );
   }
-}
 
-// ─── View Switcher ────────────────────────────────────────────────────────────
-
-class _ViewSwitcher extends StatelessWidget {
-  const _ViewSwitcher({
-    required this.currentView,
-    required this.onViewChanged,
-    required this.onSearch,
-  });
-
-  final _DesktopView currentView;
-  final ValueChanged<_DesktopView> onViewChanged;
-  final VoidCallback onSearch;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    Widget item(_DesktopView view, IconData icon, String label) {
-      final isSelected = currentView == view;
-      return InkWell(
-        onTap: () => onViewChanged(view),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: isSelected
-              ? BoxDecoration(
-                  color: cs.primaryContainer.withAlpha(120),
-                  border: Border(left: BorderSide(color: cs.primary, width: 2)),
-                )
-              : null,
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isSelected ? cs.primary : cs.onSurfaceVariant,
+  static Widget _navItem({
+    required IconData icon,
+    required String label,
+    required _DesktopView view,
+    required _DesktopView currentView,
+    required ValueChanged<_DesktopView> onViewChanged,
+    required ColorScheme cs,
+    required bool isDark,
+  }) {
+    final isSelected = currentView == view;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => onViewChanged(view),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: isSelected
+            ? BoxDecoration(
+                color: cs.primary.withValues(alpha: isDark ? 0.14 : 0.09),
+                borderRadius: BorderRadius.circular(8),
+              )
+            : null,
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? cs.primary : cs.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? cs.primary : cs.onSurface,
               ),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected ? cs.primary : cs.onSurface,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        item(_DesktopView.home, Icons.home_outlined, 'Home'),
-        item(_DesktopView.documents, Icons.description_outlined, 'Documents'),
-        item(_DesktopView.sessions, Icons.event_outlined, 'Sessions'),
-        InkWell(
-          onTap: onSearch,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.search_outlined,
-                  size: 16,
-                  color: cs.onSurfaceVariant,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Search',
-                  style: TextStyle(fontSize: 13, color: cs.onSurface),
-                ),
-              ],
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Template Dropdown ────────────────────────────────────────────────────────
-
-class _TemplateDropdown extends StatelessWidget {
-  const _TemplateDropdown({
-    required this.templates,
-    required this.activeTemplate,
-    required this.onChanged,
-  });
-
-  final List<Template> templates;
-  final Template? activeTemplate;
-  final Future<void> Function(Template?) onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<Template?>(
-        isExpanded: true,
-        value: activeTemplate,
-        borderRadius: BorderRadius.circular(10),
-        style: TextStyle(fontSize: 13, color: cs.onSurface),
-        hint: Text(
-          'Default order',
-          style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-        ),
-        items: [
-          DropdownMenuItem<Template?>(
-            value: null,
-            child: Text(
-              'Default order',
-              style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-            ),
-          ),
-          for (final t in templates)
-            DropdownMenuItem<Template?>(
-              value: t,
-              child: Text(t.name, style: const TextStyle(fontSize: 13)),
-            ),
-        ],
-        onChanged: (t) => onChanged(t),
-      ),
-    );
-  }
-}
-
-// ─── Section Label ────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.2,
-          color: cs.onSurfaceVariant,
+          ],
         ),
       ),
     );
@@ -836,7 +895,7 @@ class TemplateListScreen extends StatelessWidget {
     return const EmptyState(
       icon: Icons.layers_outlined,
       title: 'Templates',
-      subtitle: 'Create templates to organize your document order.',
+      subtitle: 'Create templates to organize your song order.',
     );
   }
 }

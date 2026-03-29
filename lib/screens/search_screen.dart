@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../controllers/workspace_controller.dart';
@@ -22,8 +24,22 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   String _query = '';
+  Timer? _debounceTimer;
 
   WorkspaceController get _ws => widget.controller;
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() => _query = value);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +68,7 @@ class _SearchScreenState extends State<SearchScreen> {
             hintStyle: TextStyle(color: cs.onSurfaceVariant),
           ),
           style: const TextStyle(fontSize: 16),
-          onChanged: (v) => setState(() => _query = v),
+          onChanged: _onSearchChanged,
         ),
         actions: [
           if (_query.isNotEmpty)
@@ -67,20 +83,24 @@ class _SearchScreenState extends State<SearchScreen> {
           ? const EmptyState(
               icon: Icons.search,
               title: 'Search',
-              subtitle: 'Start typing to search across documents, sessions, and templates.',
+              subtitle:
+                  'Start typing to search across documents, sessions, and templates.',
             )
           : results.isEmpty
-              ? EmptyState(
-                  icon: Icons.search_off,
-                  title: 'No results',
-                  subtitle: 'Nothing matched "$_query".',
-                )
-              : ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: [
-                    if (docResults.isNotEmpty) ...[
-                      _SectionHeader(label: 'DOCUMENTS'),
-                      ...docResults.map((r) {
+          ? EmptyState(
+              icon: Icons.search_off,
+              title: 'No results',
+              subtitle: 'Nothing matched "$_query".',
+            )
+          : ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: [
+                if (docResults.isNotEmpty) ...[
+                  _SectionHeader(label: 'DOCUMENTS'),
+                  // Guard: skip results whose document was deleted since search ran
+                  ...docResults
+                      .where((r) => _ws.documents.any((d) => d.id == r.id))
+                      .map((r) {
                         final doc = _ws.documents.firstWhere(
                           (d) => d.id == r.id,
                         );
@@ -100,10 +120,13 @@ class _SearchScreenState extends State<SearchScreen> {
                           },
                         );
                       }),
-                    ],
-                    if (sessionResults.isNotEmpty) ...[
-                      _SectionHeader(label: 'SESSIONS'),
-                      ...sessionResults.map((r) {
+                ],
+                if (sessionResults.isNotEmpty) ...[
+                  _SectionHeader(label: 'SESSIONS'),
+                  // Guard: skip results whose session was deleted since search ran
+                  ...sessionResults
+                      .where((r) => _ws.sessions.any((s) => s.id == r.id))
+                      .map((r) {
                         final session = _ws.sessions.firstWhere(
                           (s) => s.id == r.id,
                         );
@@ -132,10 +155,13 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                         );
                       }),
-                    ],
-                    if (templateResults.isNotEmpty) ...[
-                      _SectionHeader(label: 'TEMPLATES'),
-                      ...templateResults.map((r) {
+                ],
+                if (templateResults.isNotEmpty) ...[
+                  _SectionHeader(label: 'TEMPLATES'),
+                  // Guard: skip results whose template was deleted since search ran
+                  ...templateResults
+                      .where((r) => _ws.templates.any((t) => t.id == r.id))
+                      .map((r) {
                         final template = _ws.templates.firstWhere(
                           (t) => t.id == r.id,
                         );
@@ -155,9 +181,9 @@ class _SearchScreenState extends State<SearchScreen> {
                           },
                         );
                       }),
-                    ],
-                  ],
-                ),
+                ],
+              ],
+            ),
     );
   }
 }

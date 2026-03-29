@@ -1,131 +1,175 @@
 import 'package:flutter/material.dart';
 
 import '../models/document_model.dart';
+import '../utils/haptics.dart';
+import 'song_type_icon.dart';
 
-/// A card representing a song in the session sidebar.
-///
-/// Displays in two states:
-/// - Expanded: Shows full card with title, metadata
-/// - Collapsed: Not visible (handled by parent)
-///
-/// Supports selection state and drag handles.
+const Color _kSongAccent = Color(0xFF7C3AED); // violet / purple
+const Color _kMedleyAccent = Color(0xFF2563EB); // blue
+
+/// A styled card for a song in the session sidebar.
+/// Swipe left to reveal delete. Long-press to drag-reorder.
 class SongCard extends StatelessWidget {
   const SongCard({
     super.key,
     required this.document,
-    required this.index,
     required this.isSelected,
     required this.onTap,
-    required this.onRemove,
   });
 
   final AppDocument document;
-  final int index;
   final bool isSelected;
   final VoidCallback onTap;
-  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 0),
+    final isMedley = document.songType == SongType.medley;
+    final accent = isMedley ? _kMedleyAccent : _kSongAccent;
+
+    final selectedBg = isDark
+        ? accent.withValues(alpha: 0.28)
+        : accent.withValues(alpha: 0.18);
+    final unselectedBg = isDark
+        ? accent.withValues(alpha: 0.07)
+        : accent.withValues(alpha: 0.04);
+
+    final selectedBorderColor = isDark
+        ? accent.withValues(alpha: 0.90)
+        : accent.withValues(alpha: 0.80);
+    final unselectedBorderColor = accent.withValues(
+      alpha: isDark ? 0.30 : 0.22,
+    );
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      margin: const EdgeInsets.symmetric(vertical: 3),
       decoration: BoxDecoration(
+        color: isSelected ? selectedBg : unselectedBg,
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isSelected
-              ? cs.primary
-              : cs.outlineVariant.withValues(alpha: 0.5),
-          width: isSelected ? 2 : 1,
+          color: isSelected ? selectedBorderColor : unselectedBorderColor,
+          width: isSelected ? 1.5 : 1.0,
         ),
-        borderRadius: BorderRadius.circular(12),
-        color: isSelected
-            ? cs.primaryContainer.withValues(alpha: 0.3)
-            : cs.surfaceContainerLowest,
         boxShadow: isSelected
             ? [
                 BoxShadow(
-                  color: cs.primary.withValues(alpha: 0.15),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  color: accent.withValues(alpha: 0.35),
+                  blurRadius: 14,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 3),
                 ),
               ]
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 2,
-                  offset: const Offset(0, 1),
-                ),
-              ],
+            : null,
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              // Song number badge
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: isSelected ? cs.primary : cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticsManager.songSelectedFeedback();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(10),
+          splashColor: accent.withValues(alpha: 0.12),
+          highlightColor: accent.withValues(alpha: 0.08),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: SizedBox(
+              height: 56,
+              child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Type icon
+                SongTypeIcon(
+                  type: document.songType,
+                  size: 18,
+                  color: isSelected ? accent : accent.withValues(alpha: 0.65),
                 ),
-                child: Center(
-                  child: Text(
-                    '${index + 1}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isSelected
-                          ? cs.onPrimary
-                          : cs.onSecondaryContainer,
-                    ),
+                const SizedBox(width: 10),
+
+                // Title + type label
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        document.title.isEmpty ? 'Untitled' : document.title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? cs.onSurface
+                              : cs.onSurface.withValues(alpha: 0.88),
+                          letterSpacing: -0.1,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        isMedley ? 'Medley' : 'Song',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.80),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
 
-              // Song title
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      document.title.isEmpty ? 'Untitled' : document.title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurface,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Drag handle always visible; delete shown only when selected
-              if (isSelected)
-                IconButton(
-                  icon: Icon(Icons.delete_outline, size: 18, color: cs.error),
-                  tooltip: 'Remove from session',
-                  onPressed: onRemove,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  padding: EdgeInsets.zero,
-                ),
-              Icon(
-                Icons.drag_handle,
-                size: 18,
-                color: isSelected
-                    ? cs.onPrimaryContainer.withValues(alpha: 0.5)
-                    : cs.onSurfaceVariant.withValues(alpha: 0.4),
-              ),
-            ],
+                // Key badge + duration column (if either is available)
+                if (document.songKey != null ||
+                    document.durationLabel != null) ...[
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (document.songKey != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(
+                              alpha: isSelected ? 0.20 : 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: Text(
+                            document.songKey!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isSelected
+                                  ? Colors.white
+                                  : accent.withValues(alpha: 0.85),
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      if (document.durationLabel != null) ...[
+                        if (document.songKey != null)
+                          const SizedBox(height: 3),
+                        Text(
+                          document.durationLabel!,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.70),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ],
+            ),
+            ),
           ),
         ),
       ),

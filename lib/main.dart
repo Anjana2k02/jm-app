@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'config/supabase_config.dart';
+import 'services/connectivity_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,14 +18,31 @@ Future<void> main() async {
 
   await dotenv.load(fileName: '.env', mergeWith: {});
 
-  if (SupabaseConfig.isConfigured) {
-    await Supabase.initialize(
-      url: SupabaseConfig.url,
-      anonKey: SupabaseConfig.anonKey,
-    );
+  // Check connectivity before trying to reach Supabase.
+  final connectivity = ConnectivityService();
+  final hasNetwork = await connectivity.checkNow();
+
+  bool supabaseReady = false;
+
+  if (hasNetwork && SupabaseConfig.isConfigured) {
+    try {
+      await Supabase.initialize(
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.anonKey,
+      );
+      supabaseReady = true;
+    } catch (e) {
+      debugPrint('Supabase init failed: $e');
+    }
   }
 
-  runApp(App(isConfigured: SupabaseConfig.isConfigured));
+  runApp(
+    App(
+      isConfigured: SupabaseConfig.isConfigured,
+      supabaseReady: supabaseReady,
+      connectivity: connectivity,
+    ),
+  );
 }
 
 bool get _isNativeApp {

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/connectivity_service.dart';
 import 'auth_screen.dart';
 import 'workspace_host_screen.dart';
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+  const AuthGate({super.key, required this.connectivity});
+
+  final ConnectivityService connectivity;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +21,7 @@ class AuthGate extends StatelessWidget {
         if (session == null) {
           return const AuthScreen();
         }
-        return const WorkspaceHostScreen();
+        return WorkspaceHostScreen(connectivity: connectivity);
       },
     );
   }

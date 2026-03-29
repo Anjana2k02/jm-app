@@ -199,7 +199,7 @@ class AppTheme {
         side: BorderSide.none,
       ),
 
-      // Dialog: rounded corners, generous padding feel
+      // Dialog: transparent background so GlassContainer wrapper shows through
       dialogTheme: DialogThemeData(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
@@ -213,8 +213,10 @@ class AppTheme {
           fontSize: 14,
           color: colorScheme.onSurfaceVariant,
         ),
-        backgroundColor: colorScheme.surfaceContainerHigh,
-        elevation: 6,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
       ),
 
       // ListTile: used in doc lists
@@ -242,21 +244,29 @@ class AppTheme {
         space: 1,
       ),
 
-      // SnackBar
+      // SnackBar: semi-opaque fallback; use showGlassSnackBar() for full glass
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
-        backgroundColor: isDark ? colorScheme.surfaceContainerHigh : colorScheme.inverseSurface,
-        contentTextStyle: GoogleFonts.inter(fontSize: 13),
+        backgroundColor: isDark
+            ? kSidebarDark.withValues(alpha: 0.92)
+            : Colors.white.withValues(alpha: 0.92),
+        elevation: 4,
+        contentTextStyle: GoogleFonts.inter(
+          fontSize: 13,
+          color: isDark ? Colors.white : kSeedPrimary,
+        ),
       ),
 
-      // BottomSheet
+      // BottomSheet: transparent so glass builder handles background
       bottomSheetTheme: const BottomSheetThemeData(
-        showDragHandle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        showDragHandle: false,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
       ),
     );

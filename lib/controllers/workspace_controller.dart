@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart' show Clipboard;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -60,6 +62,37 @@ class WorkspaceController extends ChangeNotifier {
   bool saving = false;
   String? loadError; // non-null when the last loadAll() had a fetch failure
 
+  Timer? _autoSaveTimer;
+  Timer? _errorTimer;
+
+  // Non-null for ~4 s after an operation fails; cleared automatically.
+  String? operationError;
+
+  void _setError(String message) {
+    operationError = message;
+    notifyListeners();
+    _errorTimer?.cancel();
+    _errorTimer = Timer(const Duration(seconds: 4), () {
+      operationError = null;
+      notifyListeners();
+    });
+  }
+
+  // ─── Dispose ───────────────────────────────────────────────────────────────
+
+  @override
+  void dispose() {
+    _autoSaveTimer?.cancel();
+    _errorTimer?.cancel();
+    quillController?.dispose();
+    super.dispose();
+  }
+
+  void _scheduleAutoSave() {
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(seconds: 2), saveDocument);
+  }
+
   // Sessions
   List<JamSession> sessions = [];
 
@@ -86,9 +119,9 @@ class WorkspaceController extends ChangeNotifier {
       // Fetch all three collections in parallel.
       // Each has its own error handler so a single failing table
       // (e.g. sessions not yet created in Supabase) doesn't block the rest.
-      final docsFuture = _documentService
-          .fetchDocuments(user.id)
-          .catchError((Object e) {
+      final docsFuture = _documentService.fetchDocuments(user.id).catchError((
+        Object e,
+      ) {
         loadError = 'Could not load documents: $e';
         return <AppDocument>[];
       });
@@ -96,21 +129,22 @@ class WorkspaceController extends ChangeNotifier {
       final templatesFuture = _templateService
           .fetchTemplates(user.id)
           .catchError((Object e) {
-        loadError ??= 'Could not load templates: $e';
-        return <Template>[];
-      });
+            loadError ??= 'Could not load templates: $e';
+            return <Template>[];
+          });
 
-      final sessionsFuture = _sessionService
-          .fetchSessions(user.id)
-          .catchError((Object e) {
+      final sessionsFuture = _sessionService.fetchSessions(user.id).catchError((
+        Object e,
+      ) {
         loadError ??= 'Could not load sessions: $e';
         return <JamSession>[];
       });
 
-      final results = await Future.wait(
-        [docsFuture, templatesFuture, sessionsFuture],
-        eagerError: false,
-      );
+      final results = await Future.wait([
+        docsFuture,
+        templatesFuture,
+        sessionsFuture,
+      ], eagerError: false);
 
       documents = results[0] as List<AppDocument>;
       templates = results[1] as List<Template>;
@@ -195,9 +229,10 @@ class WorkspaceController extends ChangeNotifier {
     return Document.fromJson(content);
   }
 
-  /// Creates a [QuillController] pre-configured with the chord-aware paste hook.
+  /// Creates a [QuillController] pre-configured with the chord-aware paste hook
+  /// and a 2-second debounced auto-save listener.
   QuillController _makeController(List<dynamic> content) {
-    return QuillController(
+    final ctrl = QuillController(
       document: _documentFromContent(content),
       selection: const TextSelection.collapsed(offset: 0),
       config: QuillControllerConfig(
@@ -206,6 +241,8 @@ class WorkspaceController extends ChangeNotifier {
         ),
       ),
     );
+    ctrl.document.changes.listen((_) => _scheduleAutoSave());
+    return ctrl;
   }
 
   /// Intercepts clipboard paste to detect chord sheets and apply monospace
@@ -236,22 +273,32 @@ class WorkspaceController extends ChangeNotifier {
 
   // ─── Documents ────────────────────────────────────────────────────────────
 
-  Future<void> createDocument(String title) async {
+  Future<bool> createDocument(
+    String title, [
+    SongType songType = SongType.song,
+  ]) async {
     final user = _client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return false;
 
-    final document = await _documentService.createDocument(
-      userId: user.id,
-      title: title.trim(),
-    );
+    try {
+      final document = await _documentService.createDocument(
+        userId: user.id,
+        title: title.trim(),
+        songType: songType,
+      );
 
-    documents = [...documents, document];
-    selectedDocument = document;
-    quillController = _makeController(document.content);
-    notifyListeners();
+      documents = [...documents, document];
+      selectedDocument = document;
+      quillController = _makeController(document.content);
+      notifyListeners();
 
-    if (activeTemplate != null) {
-      await _loadTemplateItems(activeTemplate!);
+      if (activeTemplate != null) {
+        await _loadTemplateItems(activeTemplate!);
+      }
+      return true;
+    } catch (e) {
+      _setError('Could not create song. Try again.');
+      return false;
     }
   }
 
@@ -270,15 +317,18 @@ class WorkspaceController extends ChangeNotifier {
     final trimmed = newTitle.trim();
     final updated = document.copyWith(title: trimmed, updatedAt: DateTime.now());
 
-    await _documentService.updateDocument(
-      documentId: document.id,
-      title: trimmed,
-      content: document.content,
-    );
-
-    selectedDocument = updated;
-    documents = documents.map((d) => d.id == document.id ? updated : d).toList();
-    notifyListeners();
+    try {
+      await _documentService.updateDocument(
+        documentId: document.id,
+        title: trimmed,
+        content: document.content,
+      );
+      selectedDocument = updated;
+      documents = documents.map((d) => d.id == document.id ? updated : d).toList();
+      notifyListeners();
+    } catch (e) {
+      _setError('Could not rename song. Try again.');
+    }
   }
 
   Future<void> saveDocument() async {
@@ -289,23 +339,71 @@ class WorkspaceController extends ChangeNotifier {
     saving = true;
     notifyListeners();
 
-    await _documentService.updateDocument(
-      documentId: document.id,
-      title: document.title,
-      content: controller.document.toDelta().toJson(),
-    );
+    try {
+      final content = controller.document.toDelta().toJson();
+      await _documentService.updateDocument(
+        documentId: document.id,
+        title: document.title,
+        content: content,
+      );
+      documents = documents.map((d) {
+        if (d.id == document.id) {
+          return d.copyWith(content: content, updatedAt: DateTime.now());
+        }
+        return d;
+      }).toList();
+    } catch (e) {
+      _setError('Failed to save. Check your connection.');
+    } finally {
+      saving = false;
+      notifyListeners();
+    }
+  }
 
-    documents = documents.map((d) {
-      if (d.id == document.id) {
-        return d.copyWith(
-          content: controller.document.toDelta().toJson(),
-          updatedAt: DateTime.now(),
-        );
+  /// Saves song metadata (key, bpm, duration) for the currently selected song.
+  /// Accepts a map of DB column names → values (null clears the field).
+  Future<void> updateSongMeta(Map<String, dynamic> fields) async {
+    final doc = selectedDocument;
+    if (doc == null) return;
+
+    try {
+      await _documentService.updateSongMeta(documentId: doc.id, fields: fields);
+      final updated = doc.copyWith(
+        songKey: fields.containsKey('song_key')
+            ? (fields['song_key'] as String?)
+            : doc.songKey,
+        bpm: fields.containsKey('bpm') ? (fields['bpm'] as int?) : doc.bpm,
+        durationSeconds: fields.containsKey('duration_seconds')
+            ? (fields['duration_seconds'] as int?)
+            : doc.durationSeconds,
+        clearSongKey: fields['song_key'] == null && fields.containsKey('song_key'),
+        clearBpm: fields['bpm'] == null && fields.containsKey('bpm'),
+        clearDuration:
+            fields['duration_seconds'] == null && fields.containsKey('duration_seconds'),
+      );
+      selectedDocument = updated;
+      documents = documents.map((d) => d.id == doc.id ? updated : d).toList();
+      notifyListeners();
+    } catch (e) {
+      _setError('Could not save song info. Try again.');
+    }
+  }
+
+  Future<bool> deleteDocument(String documentId) async {
+    try {
+      await _documentService.deleteDocument(documentId);
+      if (selectedDocument?.id == documentId) {
+        selectedDocument = null;
+        quillController?.dispose();
+        quillController = null;
       }
-      return d;
-    }).toList();
-    saving = false;
-    notifyListeners();
+      documents = documents.where((d) => d.id != documentId).toList();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError('Could not delete song. Try again.');
+      return false;
+    }
   }
 
   Future<void> reorderDocuments(int oldIndex, int newIndex) async {
@@ -325,8 +423,9 @@ class WorkspaceController extends ChangeNotifier {
       documentIds: ids,
     );
 
-    final refreshed =
-        await _templateService.fetchTemplateItems(activeTemplate!.id);
+    final refreshed = await _templateService.fetchTemplateItems(
+      activeTemplate!.id,
+    );
     templateItems = refreshed;
     notifyListeners();
   }
@@ -361,51 +460,62 @@ class WorkspaceController extends ChangeNotifier {
 
   // ─── Sessions ─────────────────────────────────────────────────────────────
 
-  Future<void> createSession(
-    String name,
-    DateTime? date,
-    String notes,
-  ) async {
+  Future<bool> createSession(String name, DateTime? date, String notes) async {
     final user = _client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return false;
 
-    final session = await _sessionService.createSession(
-      userId: user.id,
-      name: name.trim(),
-      sessionDate: date,
-      notes: notes,
-    );
-
-    sessions = [...sessions, session];
-    // Re-sort by session_date ASC, nulls last
-    sessions.sort((a, b) {
-      if (a.sessionDate == null && b.sessionDate == null) return 0;
-      if (a.sessionDate == null) return 1;
-      if (b.sessionDate == null) return -1;
-      return a.sessionDate!.compareTo(b.sessionDate!);
-    });
-    notifyListeners();
+    try {
+      final session = await _sessionService.createSession(
+        userId: user.id,
+        name: name.trim(),
+        sessionDate: date,
+        notes: notes,
+      );
+      sessions = [...sessions, session];
+      // Re-sort by session_date ASC, nulls last
+      sessions.sort((a, b) {
+        if (a.sessionDate == null && b.sessionDate == null) return 0;
+        if (a.sessionDate == null) return 1;
+        if (b.sessionDate == null) return -1;
+        return a.sessionDate!.compareTo(b.sessionDate!);
+      });
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError('Could not create session. Try again.');
+      return false;
+    }
   }
 
   Future<void> updateSession(
     JamSession updated, {
     bool clearDate = false,
   }) async {
-    await _sessionService.updateSession(
-      sessionId: updated.id,
-      name: updated.name,
-      sessionDate: updated.sessionDate,
-      clearDate: clearDate,
-      notes: updated.notes,
-    );
-    sessions = sessions.map((s) => s.id == updated.id ? updated : s).toList();
-    notifyListeners();
+    try {
+      await _sessionService.updateSession(
+        sessionId: updated.id,
+        name: updated.name,
+        sessionDate: updated.sessionDate,
+        clearDate: clearDate,
+        notes: updated.notes,
+      );
+      sessions = sessions.map((s) => s.id == updated.id ? updated : s).toList();
+      notifyListeners();
+    } catch (e) {
+      _setError('Could not update session. Try again.');
+    }
   }
 
-  Future<void> deleteSession(String sessionId) async {
-    await _sessionService.deleteSession(sessionId);
-    sessions = sessions.where((s) => s.id != sessionId).toList();
-    notifyListeners();
+  Future<bool> deleteSession(String sessionId) async {
+    try {
+      await _sessionService.deleteSession(sessionId);
+      sessions = sessions.where((s) => s.id != sessionId).toList();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError('Could not delete session. Try again.');
+      return false;
+    }
   }
 
   Future<List<SessionSong>> loadSessionSongs(String sessionId) async {
@@ -418,8 +528,9 @@ class WorkspaceController extends ChangeNotifier {
     final today = DateTime.now();
     final todayDate = DateTime(today.year, today.month, today.day);
     return sessions
-        .where((s) =>
-            s.sessionDate != null && !s.sessionDate!.isBefore(todayDate))
+        .where(
+          (s) => s.sessionDate != null && !s.sessionDate!.isBefore(todayDate),
+        )
         .toList();
   }
 
@@ -433,36 +544,42 @@ class WorkspaceController extends ChangeNotifier {
 
     for (final doc in documents) {
       if (doc.title.toLowerCase().contains(q)) {
-        results.add(SearchResult(
-          type: SearchResultType.document,
-          id: doc.id,
-          title: doc.title.isEmpty ? 'Untitled' : doc.title,
-          subtitle: 'Document',
-        ));
+        results.add(
+          SearchResult(
+            type: SearchResultType.document,
+            id: doc.id,
+            title: doc.title.isEmpty ? 'Untitled' : doc.title,
+            subtitle: 'Document',
+          ),
+        );
       }
     }
 
     for (final session in sessions) {
       if (session.name.toLowerCase().contains(q)) {
-        results.add(SearchResult(
-          type: SearchResultType.session,
-          id: session.id,
-          title: session.name,
-          subtitle: session.sessionDate != null
-              ? 'Session · ${_formatDate(session.sessionDate!)}'
-              : 'Session',
-        ));
+        results.add(
+          SearchResult(
+            type: SearchResultType.session,
+            id: session.id,
+            title: session.name,
+            subtitle: session.sessionDate != null
+                ? 'Session · ${_formatDate(session.sessionDate!)}'
+                : 'Session',
+          ),
+        );
       }
     }
 
     for (final template in templates) {
       if (template.name.toLowerCase().contains(q)) {
-        results.add(SearchResult(
-          type: SearchResultType.template,
-          id: template.id,
-          title: template.name,
-          subtitle: 'Template',
-        ));
+        results.add(
+          SearchResult(
+            type: SearchResultType.template,
+            id: template.id,
+            title: template.name,
+            subtitle: 'Template',
+          ),
+        );
       }
     }
 
@@ -471,8 +588,18 @@ class WorkspaceController extends ChangeNotifier {
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
