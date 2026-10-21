@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'config/supabase_config.dart';
+import 'controllers/theme_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,8 @@ Future<void> main() async {
   GoogleFonts.config.allowRuntimeFetching = !_isNativeApp;
 
   await dotenv.load(fileName: '.env', mergeWith: {});
+
+  await ThemeController.instance.load();
 
   if (SupabaseConfig.isConfigured) {
     await Supabase.initialize(

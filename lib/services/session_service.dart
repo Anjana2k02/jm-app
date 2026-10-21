@@ -10,11 +10,11 @@ class SessionService {
 
   // ─── Sessions CRUD ────────────────────────────────────────────────────────
 
+  // The workspace is shared: every signed-in user sees all sessions.
   Future<List<JamSession>> fetchSessions(String userId) async {
     final data = await _client
         .from('sessions')
         .select()
-        .eq('user_id', userId)
         .order('session_date', ascending: true, nullsFirst: false);
     return (data as List).map((e) => JamSession.fromMap(e)).toList();
   }

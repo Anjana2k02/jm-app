@@ -8,11 +8,11 @@ class TemplateService {
 
   final SupabaseClient _client;
 
+  // The workspace is shared: every signed-in user sees all templates.
   Future<List<Template>> fetchTemplates(String userId) async {
     final response = await _client
         .from('templates')
         .select()
-        .eq('user_id', userId)
         .order('created_at', ascending: true);
 
     return response.map<Template>((row) {

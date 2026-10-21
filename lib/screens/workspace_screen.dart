@@ -11,11 +11,12 @@ import '../theme/app_colors.dart';
 import '../widgets/document_list_tile.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/save_status_chip.dart';
+import '../widgets/theme_mode_selector.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'sessions/sessions_screen.dart';
 
-enum _DesktopView { home, documents, sessions }
+enum _DesktopView { home, documents, sessions, settings }
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({super.key, required this.controller});
@@ -289,6 +290,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         return _ws.selectedDocument == null || _ws.quillController == null
             ? _buildEmptyEditor()
             : _buildEditor();
+
+      case _DesktopView.settings:
+        return SettingsScreen(controller: _ws);
     }
   }
 
@@ -723,6 +727,7 @@ class _ViewSwitcher extends StatelessWidget {
         item(_DesktopView.home, Icons.home_outlined, 'Home'),
         item(_DesktopView.documents, Icons.description_outlined, 'Documents'),
         item(_DesktopView.sessions, Icons.event_outlined, 'Sessions'),
+        item(_DesktopView.settings, Icons.settings_outlined, 'Settings'),
         InkWell(
           onTap: onSearch,
           child: Padding(
@@ -869,6 +874,11 @@ class SettingsScreen extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             subtitle: const Text('Signed in'),
+          ),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ThemeModeSelector(),
           ),
           const Divider(),
           ListTile(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../controllers/workspace_controller.dart';
 import '../widgets/document_list_tile.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/theme_mode_selector.dart';
 import 'home_screen.dart';
 import 'mobile/mobile_editor_screen.dart';
 import 'search_screen.dart';
@@ -481,6 +482,11 @@ class _MobileSettingsTab extends StatelessWidget {
                 subtitle: Text(email),
               ),
             ),
+          ),
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: ThemeModeSelector(),
           ),
           const SizedBox(height: 8),
           Padding(

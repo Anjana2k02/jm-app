@@ -7,11 +7,11 @@ class DocumentService {
 
   final SupabaseClient _client;
 
+  // The workspace is shared: every signed-in user sees all documents.
   Future<List<AppDocument>> fetchDocuments(String userId) async {
     final response = await _client
         .from('documents')
         .select()
-        .eq('user_id', userId)
         .order('created_at', ascending: true);
 
     return response.map<AppDocument>((row) {
